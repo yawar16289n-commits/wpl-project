@@ -178,6 +178,127 @@ def delete_progress(enrollment_id):
     }), 200
 
 
+# Mark Lesson as Complete (POST)
+@progress_bp.route('/lesson/complete', methods=['POST'])
+def mark_lesson_complete():
+    from models import Progress, CourseModule, LectureResource
+    from datetime import datetime
+    import json
+    
+    data = request.get_json()
+    
+    if not data or 'user_id' not in data or 'course_id' not in data or 'lecture_id' not in data or 'lesson_id' not in data:
+        return jsonify({
+            'success': False,
+            'error': 'user_id, course_id, lecture_id, and lesson_id are required'
+        }), 400
+    
+    user_id = data['user_id']
+    course_id = data['course_id']
+    lecture_id = data['lecture_id']
+    lesson_id = data['lesson_id']
+    
+    # Get or create progress record for this lecture
+    progress = Progress.query.filter_by(
+        user_id=user_id,
+        course_id=course_id,
+        lecture_id=lecture_id
+    ).first()
+    
+    if not progress:
+        progress = Progress(
+            user_id=user_id,
+            course_id=course_id,
+            lecture_id=lecture_id,
+            completed_lectures=json.dumps([lesson_id]),
+            current_lecture=lecture_id,
+            last_accessed=datetime.utcnow()
+        )
+        db.session.add(progress)
+    else:
+        completed = json.loads(progress.completed_lectures or '[]')
+        if lesson_id not in completed:
+            completed.append(lesson_id)
+            progress.completed_lectures = json.dumps(completed)
+        progress.last_accessed = datetime.utcnow()
+    
+    # Update enrollment progress percentage
+    enrollment = Enrollment.query.filter_by(
+        user_id=user_id,
+        course_id=course_id
+    ).first()
+    
+    if enrollment:
+        # Calculate total lessons in course
+        total_lessons = db.session.query(LectureResource).join(CourseModule).filter(
+            CourseModule.course_id == course_id,
+            LectureResource.deleted_at == None,
+            CourseModule.deleted_at == None
+        ).count()
+        
+        # Calculate total completed lessons across all lectures
+        all_progress = Progress.query.filter_by(
+            user_id=user_id,
+            course_id=course_id
+        ).all()
+        
+        total_completed = 0
+        for p in all_progress:
+            completed_list = json.loads(p.completed_lectures or '[]')
+            total_completed += len(completed_list)
+        
+        # Calculate progress percentage
+        if total_lessons > 0:
+            enrollment.progress = min(int((total_completed / total_lessons) * 100), 100)
+        
+        # Mark as completed if 100%
+        if enrollment.progress >= 100:
+            enrollment.status = 'completed'
+            enrollment.completed_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Lesson marked as complete',
+        'progress': enrollment.progress if enrollment else 0,
+        'total_completed': total_completed if enrollment else 0,
+        'total_lessons': total_lessons if enrollment else 0
+    }), 200
+
+
+# Get Lesson Progress for User (GET)
+@progress_bp.route('/lessons', methods=['GET'])
+def get_lesson_progress():
+    from models import Progress
+    import json
+    
+    user_id = request.args.get('user_id')
+    course_id = request.args.get('course_id')
+    
+    if not user_id or not course_id:
+        return jsonify({
+            'success': False,
+            'error': 'user_id and course_id are required'
+        }), 400
+    
+    progress_records = Progress.query.filter_by(
+        user_id=user_id,
+        course_id=course_id
+    ).all()
+    
+    completed_lessons = {}
+    for p in progress_records:
+        lecture_id = p.lecture_id
+        completed = json.loads(p.completed_lectures or '[]')
+        completed_lessons[lecture_id] = completed
+    
+    return jsonify({
+        'success': True,
+        'completed_lessons': completed_lessons
+    }), 200
+
+
 # Dashboard Endpoints (migrated from dashboard.py)
 @progress_bp.route('/dashboard/student/<int:user_id>', methods=['GET'])
 def get_student_dashboard(user_id):
@@ -234,50 +355,61 @@ def get_student_dashboard(user_id):
 
 @progress_bp.route('/dashboard/instructor/<int:user_id>', methods=['GET'])
 def get_instructor_dashboard(user_id):
-    from models import User, Course
-    
-    user = User.query.get(user_id)
-    if not user or user.role != 'instructor':
+    try:
+        from models import User, Course
+        
+        user = User.query.get(user_id)
+        if not user or user.role != 'instructor':
+            return jsonify({
+                'success': False,
+                'error': 'Instructor not found'
+            }), 404
+        
+        # Filter out deleted courses
+        courses = Course.query.filter_by(instructor_id=user_id).filter(Course.deleted_at == None).all()
+        
+        published = []
+        drafts = []
+        total_students = 0
+        total_rating = 0
+        
+        for course in courses:
+            # Filter out deleted enrollments
+            enrollments = Enrollment.query.filter_by(course_id=course.id).filter(Enrollment.deleted_at == None).all()
+            total_students += len(enrollments)
+            total_rating += float(course.rating) if course.rating else 0
+            
+            course_data = course.to_dict()
+            course_data['enrollments'] = len(enrollments)
+            course_data['completed_students'] = len([e for e in enrollments if e.status == 'completed'])
+            
+            if course.is_published:
+                published.append(course_data)
+            else:
+                drafts.append(course_data)
+        
+        return jsonify({
+            'success': True,
+            'dashboard': {
+                'user': user.to_dict(),
+                'created_courses': {
+                    'published': published,
+                    'drafts': drafts
+                },
+                'stats': {
+                    'total_courses': len(courses),
+                    'published': len(published),
+                    'drafts': len(drafts),
+                    'total_students': total_students,
+                    'average_rating': total_rating / len(courses) if courses else 0
+                }
+            }
+        }), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in instructor dashboard: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
-            'error': 'Instructor not found'
-        }), 404
-    
-    courses = Course.query.filter_by(instructor_id=user_id).all()
-    
-    published = []
-    drafts = []
-    total_students = 0
-    total_rating = 0
-    
-    for course in courses:
-        enrollments = Enrollment.query.filter_by(course_id=course.id).all()
-        total_students += len(enrollments)
-        total_rating += float(course.rating) if course.rating else 0
-        
-        course_data = course.to_dict()
-        course_data['enrollments'] = len(enrollments)
-        course_data['completed_students'] = len([e for e in enrollments if e.status == 'completed'])
-        
-        if course.is_published:
-            published.append(course_data)
-        else:
-            drafts.append(course_data)
-    
-    return jsonify({
-        'success': True,
-        'dashboard': {
-            'user': user.to_dict(),
-            'created_courses': {
-                'published': published,
-                'drafts': drafts
-            },
-            'stats': {
-                'total_courses': len(courses),
-                'published': len(published),
-                'drafts': len(drafts),
-                'total_students': total_students,
-                'average_rating': total_rating / len(courses) if courses else 0
-            }
-        }
-    }), 200
+            'error': f"Internal Server Error: {str(e)}"
+        }), 500

@@ -3,7 +3,27 @@ from app import db
 from sqlalchemy import Numeric
 import json
 
-class User(db.Model):
+
+class SoftDeleteMixin:
+    """Mixin to add soft delete functionality to models"""
+    deleted_at = db.Column(db.DateTime, nullable=True, default=None)
+    
+    def soft_delete(self):
+        """Soft delete the record"""
+        self.deleted_at = datetime.utcnow()
+        db.session.commit()
+    
+    def restore(self):
+        """Restore a soft deleted record"""
+        self.deleted_at = None
+        db.session.commit()
+    
+    @property
+    def is_deleted(self):
+        """Check if record is soft deleted"""
+        return self.deleted_at is not None
+
+class User(SoftDeleteMixin, db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -27,7 +47,7 @@ class User(db.Model):
         }
 
 
-class Course(db.Model):
+class Course(SoftDeleteMixin, db.Model):
     __tablename__ = 'courses'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -89,7 +109,7 @@ class Course(db.Model):
         return data
 
 
-class CourseModule(db.Model):
+class CourseModule(SoftDeleteMixin, db.Model):
     __tablename__ = 'course_modules'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -119,7 +139,7 @@ class CourseModule(db.Model):
         }
 
 
-class Enrollment(db.Model):
+class Enrollment(SoftDeleteMixin, db.Model):
     __tablename__ = 'enrollments'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -151,7 +171,7 @@ class Enrollment(db.Model):
         return data
 
 
-class Review(db.Model):
+class Review(SoftDeleteMixin, db.Model):
     __tablename__ = 'reviews'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -180,7 +200,7 @@ class Review(db.Model):
         return data
 
 
-class Rating(db.Model):
+class Rating(SoftDeleteMixin, db.Model):
     __tablename__ = 'ratings'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -203,7 +223,7 @@ class Rating(db.Model):
         }
 
 
-class LectureResource(db.Model):
+class LectureResource(SoftDeleteMixin, db.Model):
     __tablename__ = 'lecture_resources'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -230,7 +250,7 @@ class LectureResource(db.Model):
         }
 
 
-class Profile(db.Model):
+class Profile(SoftDeleteMixin, db.Model):
     __tablename__ = 'profiles'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -257,7 +277,7 @@ class Profile(db.Model):
         }
 
 
-class CourseDetail(db.Model):
+class CourseDetail(SoftDeleteMixin, db.Model):
     __tablename__ = 'course_details'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -284,7 +304,7 @@ class CourseDetail(db.Model):
         }
 
 
-class CourseCategory(db.Model):
+class CourseCategory(SoftDeleteMixin, db.Model):
     __tablename__ = 'course_categories'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -309,7 +329,7 @@ class CourseCategory(db.Model):
         }
 
 
-class Progress(db.Model):
+class Progress(SoftDeleteMixin, db.Model):
     __tablename__ = 'progress'
     
     id = db.Column(db.Integer, primary_key=True)

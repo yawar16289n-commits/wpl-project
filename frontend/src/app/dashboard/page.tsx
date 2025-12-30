@@ -179,7 +179,7 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-gray-50">
       <Header />
-      
+
       {showUnenrollModal && selectedEnrollment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
@@ -237,26 +237,24 @@ export default function Dashboard() {
           )}
         </div>
 
-=        {!isInstructor && (
+        =        {!isInstructor && (
           <>
             <div className="flex gap-8 mb-8 border-b border-gray-200">
-              <button 
+              <button
                 onClick={() => setActiveTab('inprogress')}
-                className={`px-4 py-3 border-b-2 font-medium ${
-                  activeTab === 'inprogress' 
-                    ? 'border-blue-600 text-blue-600' 
+                className={`px-4 py-3 border-b-2 font-medium ${activeTab === 'inprogress'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 In Progress ({dashboardData.stats.in_progress || 0})
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('completed')}
-                className={`px-4 py-3 border-b-2 font-medium ${
-                  activeTab === 'completed' 
-                    ? 'border-blue-600 text-blue-600' 
+                className={`px-4 py-3 border-b-2 font-medium ${activeTab === 'completed'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 Completed ({dashboardData.stats.completed || 0})
               </button>
@@ -266,7 +264,7 @@ export default function Dashboard() {
               <h3 className="text-2xl font-bold text-gray-900 mb-6">
                 {activeTab === 'inprogress' ? 'Continuing Education' : 'Completed Courses'}
               </h3>
-              
+
               {activeTab === 'inprogress' && (
                 <div className="grid md:grid-cols-3 gap-6">
                   {dashboardData.enrolled_courses?.in_progress && dashboardData.enrolled_courses.in_progress.length > 0 ? (
@@ -275,7 +273,7 @@ export default function Dashboard() {
                         <Link href={`/course/${enrollment.course.id}`}>
                           <div className="cursor-pointer group">
                             <div className="relative">
-                              <Image 
+                              <Image
                                 src={enrollment.course.image || '/placeholder.svg'}
                                 alt={enrollment.course.title}
                                 width={400}
@@ -286,14 +284,14 @@ export default function Dashboard() {
                             <div className="p-5">
                               <h4 className="text-lg font-bold text-gray-900 mb-1">{enrollment.course.title}</h4>
                               <p className="text-sm text-gray-600 mb-4">{enrollment.course.instructor || enrollment.course.company}</p>
-                              
+
                               <div className="mb-3">
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-xs font-medium text-gray-600">Progress</span>
                                   <span className="text-xs font-bold text-gray-900">{enrollment.progress}%</span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div 
+                                  <div
                                     className="bg-blue-600 h-2 rounded-full transition-all"
                                     style={{ width: `${enrollment.progress}%` }}
                                   />
@@ -303,12 +301,12 @@ export default function Dashboard() {
                           </div>
                         </Link>
                         <div className="px-5 pb-5 space-y-2">
-                          <Link href={`/course/${enrollment.course.id}`}>
+                          <Link href={`/learn/${enrollment.course.id}`}>
                             <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
-                              Continue
+                              Continue Learning
                             </button>
                           </Link>
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.preventDefault();
                               handleUnenrollClick(enrollment);
@@ -336,7 +334,7 @@ export default function Dashboard() {
                       <Link key={enrollment.id} href={`/course/${enrollment.course.id}`}>
                         <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
                           <div className="relative">
-                            <Image 
+                            <Image
                               src={enrollment.course.image || '/placeholder.svg'}
                               alt={enrollment.course.title}
                               width={400}
@@ -350,7 +348,7 @@ export default function Dashboard() {
                           <div className="p-5">
                             <h4 className="text-lg font-bold text-gray-900 mb-1">{enrollment.course.title}</h4>
                             <p className="text-sm text-gray-600 mb-4">{enrollment.course.instructor || enrollment.course.company}</p>
-                            
+
                             <button className="w-full border-2 border-blue-600 text-blue-600 py-2 rounded-md font-medium hover:bg-blue-50 transition">
                               View Certificate
                             </button>
@@ -372,23 +370,21 @@ export default function Dashboard() {
         {isInstructor && (
           <>
             <div className="flex gap-8 mb-8 border-b border-gray-200">
-              <button 
+              <button
                 onClick={() => setActiveTab('published')}
-                className={`px-4 py-3 border-b-2 font-medium ${
-                  activeTab === 'published' 
-                    ? 'border-blue-600 text-blue-600' 
+                className={`px-4 py-3 border-b-2 font-medium ${activeTab === 'published'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 Published ({dashboardData.stats.published || 0})
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('drafts')}
-                className={`px-4 py-3 border-b-2 font-medium ${
-                  activeTab === 'drafts' 
-                    ? 'border-blue-600 text-blue-600' 
+                className={`px-4 py-3 border-b-2 font-medium ${activeTab === 'drafts'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 Drafts ({dashboardData.stats.drafts || 0})
               </button>
@@ -412,7 +408,7 @@ export default function Dashboard() {
                         <Link href={`/course/${course.id}`}>
                           <div className="cursor-pointer group">
                             <div className="relative">
-                              <Image 
+                              <Image
                                 src={course.image || '/placeholder.svg'}
                                 alt={course.title}
                                 width={400}
@@ -423,7 +419,7 @@ export default function Dashboard() {
                             <div className="p-5">
                               <h4 className="text-lg font-bold text-gray-900 mb-1">{course.title}</h4>
                               <p className="text-sm text-gray-600 mb-4">{course.level} • {course.duration}</p>
-                              
+
                               <div className="grid grid-cols-2 gap-4 mb-3">
                                 <div>
                                   <p className="text-xs text-gray-600">Students</p>
@@ -463,7 +459,7 @@ export default function Dashboard() {
                     dashboardData.created_courses.drafts.map((course) => (
                       <div key={course.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
                         <div className="relative">
-                          <Image 
+                          <Image
                             src={course.image || '/placeholder.svg'}
                             alt={course.title}
                             width={400}
@@ -477,7 +473,7 @@ export default function Dashboard() {
                         <div className="p-5">
                           <h4 className="text-lg font-bold text-gray-900 mb-1">{course.title}</h4>
                           <p className="text-sm text-gray-600 mb-4">{course.level} • {course.duration}</p>
-                          
+
                           <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
                             Continue Editing
                           </button>
@@ -502,7 +498,7 @@ export default function Dashboard() {
               {recommendedCourses.map((course) => (
                 <Link key={course.id} href={`/course/${course.id}`}>
                   <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
-                    <Image 
+                    <Image
                       src={course.image || '/placeholder.svg'}
                       alt={course.title}
                       width={300}

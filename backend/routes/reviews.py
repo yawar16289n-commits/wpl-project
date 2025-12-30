@@ -32,6 +32,26 @@ def create_review():
             'error': 'User not found'
         }), 404
     
+    # Check if user already reviewed this course
+    existing_review = Review.query.filter_by(
+        course_id=data['course_id'],
+        user_id=data['user_id']
+    ).filter(Review.deleted_at == None).first()
+    
+    if existing_review:
+        # Update existing review instead of creating duplicate
+        existing_review.comment = data['comment']
+        from datetime import datetime
+        existing_review.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Review updated successfully',
+            'review': existing_review.to_dict(include_user=True)
+        }), 200
+    
+    # Create new review
     new_review = Review(
         course_id=data['course_id'],
         user_id=data['user_id'],
@@ -39,6 +59,32 @@ def create_review():
     )
     
     db.session.add(new_review)
+    
+    # Update course stats
+    from models import Rating, Enrollment
+    from sqlalchemy import func
+    
+    # Count total reviews (excluding soft-deleted)
+    course.total_reviews = Review.query.filter_by(
+        course_id=data['course_id']
+    ).filter(Review.deleted_at == None).count()
+    
+    # Count total students (excluding dropped/deleted)
+    course.total_students = Enrollment.query.filter_by(
+        course_id=data['course_id']
+    ).filter(
+        Enrollment.deleted_at == None,
+        Enrollment.status != 'dropped'
+    ).count()
+    
+    # Calculate average rating
+    avg_rating = db.session.query(func.avg(Rating.rating)).filter_by(
+        course_id=data['course_id']
+    ).filter(Rating.deleted_at == None).scalar()
+    
+    if avg_rating:
+        course.rating = round(float(avg_rating), 2)
+    
     db.session.commit()
     
     return jsonify({
@@ -51,7 +97,9 @@ def create_review():
 # Get Reviews for Course (GET)
 @reviews_bp.route('/course/<int:course_id>', methods=['GET'])
 def get_course_reviews(course_id):
-    reviews = Review.query.filter_by(course_id=course_id).all()
+    reviews = Review.query.filter_by(course_id=course_id).filter(
+        Review.deleted_at == None
+    ).all()
     
     return jsonify({
         'success': True,
@@ -122,7 +170,9 @@ def delete_review(review_id):
             'error': 'Review not found'
         }), 404
     
-    db.session.delete(review)
+    # Soft delete
+    from datetime import datetime
+    review.deleted_at = datetime.utcnow()
     db.session.commit()
     
     return jsonify({

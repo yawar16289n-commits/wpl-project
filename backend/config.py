@@ -16,4 +16,16 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f'mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    CORS_ORIGINS = os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',')
+    # Parse CORS origins
+    frontend_urls = os.getenv('FRONTEND_URL', 'http://localhost:3000,http://localhost:3001')
+    CORS_ORIGINS = [url.strip() for url in frontend_urls.split(',')]
+    
+    # Ensure all localhost variants are included for development
+    if DEBUG:
+        CORS_ORIGINS.extend([
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001'
+        ])
+        CORS_ORIGINS = list(set(CORS_ORIGINS))  # Remove duplicates

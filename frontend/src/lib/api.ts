@@ -29,7 +29,7 @@ async function apiCall<T = unknown>(
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
-    
+
     if (userId) {
       headers['X-User-Id'] = userId;
     }
@@ -378,6 +378,29 @@ export const progressApi = {
   resetProgress: async (enrollmentId: number) => {
     return apiCall(`/progress/${enrollmentId}`, {
       method: 'DELETE',
+    });
+  },
+
+  markLessonComplete: async (
+    userId: number,
+    courseId: number,
+    lectureId: number,
+    lessonId: number
+  ) => {
+    return apiCall('/progress/lesson/complete', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        course_id: courseId,
+        lecture_id: lectureId,
+        lesson_id: lessonId,
+      }),
+    });
+  },
+
+  getLessonProgress: async (userId: number, courseId: number) => {
+    return apiCall(`/progress/lessons?user_id=${userId}&course_id=${courseId}`, {
+      method: 'GET',
     });
   },
 };

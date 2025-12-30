@@ -179,7 +179,9 @@ def unenroll_from_course(enrollment_id):
             'error': 'Already unenrolled from this course'
         }), 400
     
+    # Soft delete: set status and deleted_at
     enrollment.status = 'dropped'
+    enrollment.deleted_at = datetime.utcnow()
     
     course = Course.query.get(enrollment.course_id)
     if course and course.total_students > 0:
@@ -270,7 +272,11 @@ def get_user_enrollments(user_id):
     
     status = request.args.get('status')
     
-    query = Enrollment.query.filter_by(user_id=user_id)
+    # Filter out soft-deleted and dropped enrollments
+    query = Enrollment.query.filter_by(user_id=user_id).filter(
+        Enrollment.deleted_at == None,
+        Enrollment.status != 'dropped'
+    )
     
     if status:
         query = query.filter_by(status=status)
