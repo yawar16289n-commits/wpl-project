@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { userApi } from '@/lib/api';
 import Header from '@/app/components/Header';
 import Link from 'next/link';
@@ -11,7 +10,6 @@ import Image from 'next/image';
 export default function PublicProfile() {
   const params = useParams();
   const router = useRouter();
-  const { user: currentUser } = useAuth();
   const userId = params.id ? parseInt(params.id as string) : null;
 
   const [profile, setProfile] = useState<{
@@ -26,7 +24,6 @@ export default function PublicProfile() {
       description: string;
       category: string;
       level: string;
-      price: number;
       rating: number;
       total_students: number;
       image?: string;
@@ -56,7 +53,7 @@ export default function PublicProfile() {
     };
 
     fetchProfile();
-  }, [userId, currentUser, router]);
+  }, [userId, router]);
 
   if (loading) {
     return (
@@ -163,9 +160,6 @@ export default function PublicProfile() {
 
                         <div className="mt-3 flex items-center justify-between">
                           <span className="text-xs text-gray-500 uppercase">{course.level}</span>
-                          <span className="font-bold text-blue-600">
-                            {course.price === 0 ? 'Free' : `$${course.price}`}
-                          </span>
                         </div>
                       </div>
                     </div>

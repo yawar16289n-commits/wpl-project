@@ -3,9 +3,10 @@ from models import User, Course, Enrollment
 from database import db
 from datetime import datetime
 
-enrollment_bp = Blueprint('enrollment', __name__, url_prefix='/enrollments')
+enrollments_bp = Blueprint('enrollments', __name__, url_prefix='/enrollments')
 
-@enrollment_bp.route('/', methods=['POST'])
+# Create Enrollment (POST)
+@enrollments_bp.route('/', methods=['POST'])
 def enroll_in_course():
     data = request.get_json()
     
@@ -81,7 +82,88 @@ def enroll_in_course():
     }), 201
 
 
-@enrollment_bp.route('/<int:enrollment_id>', methods=['DELETE'])
+# Get All Enrollments (GET)
+@enrollments_bp.route('/', methods=['GET'])
+def get_all_enrollments():
+    user_id = request.args.get('user_id')
+    course_id = request.args.get('course_id')
+    status = request.args.get('status')
+    
+    query = Enrollment.query
+    
+    if user_id:
+        query = query.filter_by(user_id=user_id)
+    if course_id:
+        query = query.filter_by(course_id=course_id)
+    if status:
+        query = query.filter_by(status=status)
+    
+    enrollments = query.all()
+    
+    return jsonify({
+        'success': True,
+        'enrollments': [enrollment.to_dict(include_course=True) for enrollment in enrollments],
+        'total': len(enrollments)
+    }), 200
+
+
+# Get Enrollment by ID (GET)
+@enrollments_bp.route('/<int:enrollment_id>', methods=['GET'])
+def get_enrollment(enrollment_id):
+    enrollment = Enrollment.query.get(enrollment_id)
+    
+    if not enrollment:
+        return jsonify({
+            'success': False,
+            'error': 'Enrollment not found'
+        }), 404
+    
+    return jsonify({
+        'success': True,
+        'enrollment': enrollment.to_dict(include_course=True)
+    }), 200
+
+
+# Update Enrollment (PUT)
+@enrollments_bp.route('/<int:enrollment_id>', methods=['PUT'])
+def update_enrollment(enrollment_id):
+    enrollment = Enrollment.query.get(enrollment_id)
+    
+    if not enrollment:
+        return jsonify({
+            'success': False,
+            'error': 'Enrollment not found'
+        }), 404
+    
+    data = request.get_json()
+    
+    if 'progress' in data:
+        progress = data['progress']
+        if not isinstance(progress, (int, float)) or progress < 0 or progress > 100:
+            return jsonify({
+                'success': False,
+                'error': 'progress must be a number between 0 and 100'
+            }), 400
+        enrollment.progress = progress
+        
+        if progress >= 100 and enrollment.status == 'active':
+            enrollment.status = 'completed'
+            enrollment.completed_at = datetime.utcnow()
+    
+    if 'status' in data:
+        enrollment.status = data['status']
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Enrollment updated successfully',
+        'enrollment': enrollment.to_dict()
+    }), 200
+
+
+# Delete Enrollment (DELETE)
+@enrollments_bp.route('/<int:enrollment_id>', methods=['DELETE'])
 def unenroll_from_course(enrollment_id):
     enrollment = Enrollment.query.get(enrollment_id)
     
@@ -111,7 +193,8 @@ def unenroll_from_course(enrollment_id):
     }), 200
 
 
-@enrollment_bp.route('/check/<int:user_id>/<int:course_id>', methods=['GET'])
+# Additional helper routes
+@enrollments_bp.route('/check/<int:user_id>/<int:course_id>', methods=['GET'])
 def check_enrollment(user_id, course_id):
     enrollment = Enrollment.query.filter_by(
         user_id=user_id,
@@ -132,7 +215,7 @@ def check_enrollment(user_id, course_id):
     }), 200
 
 
-@enrollment_bp.route('/<int:enrollment_id>/progress', methods=['PUT'])
+@enrollments_bp.route('/<int:enrollment_id>/progress', methods=['PUT'])
 def update_progress(enrollment_id):
     
     enrollment = Enrollment.query.get(enrollment_id)
@@ -174,7 +257,7 @@ def update_progress(enrollment_id):
     }), 200
 
 
-@enrollment_bp.route('/user/<int:user_id>', methods=['GET'])
+@enrollments_bp.route('/user/<int:user_id>', methods=['GET'])
 def get_user_enrollments(user_id):
     
     user = User.query.get(user_id)

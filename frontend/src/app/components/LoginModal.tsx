@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { authApi } from '@/lib/api';
 
 interface LoginModalProps {
   onClose: () => void;
@@ -16,7 +16,6 @@ export default function LoginModal({ onClose, onSignup }: LoginModalProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,11 +23,17 @@ export default function LoginModal({ onClose, onSignup }: LoginModalProps) {
     setError('');
     setLoading(true);
 
-    const result = await login(email, password);
+    const result = await authApi.login({ email, password });
 
-    if (result.success) {
-      onClose();
-      router.push('/dashboard');
+    if (result.success && result.data) {
+      const userData = result.data as { success: boolean; user: { id: number; name: string; email: string; role: string } };
+      if (userData.success) {
+        localStorage.setItem('user', JSON.stringify(userData.user));
+        onClose();
+        router.push('/dashboard');
+      } else {
+        setError('Login failed');
+      }
     } else {
       setError(result.error || 'Login failed');
     }

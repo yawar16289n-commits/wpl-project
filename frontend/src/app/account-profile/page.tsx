@@ -1,22 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import { userApi } from '@/lib/api';
 import Header from '@/app/components/Header';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import Link from 'next/link';
 
 export default function AccountProfile() {
-  return (
-    <ProtectedRoute>
-      <ProfileContent />
-    </ProtectedRoute>
-  );
-}
-
-function ProfileContent() {
-  const { user } = useAuth();
+  const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null);
   const [profile, setProfile] = useState<{
     name: string;
     email: string;
@@ -37,9 +27,15 @@ function ProfileContent() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        setLoading(false);
+        return;
+      }
+      const userData = JSON.parse(userStr);
+      setUser(userData);
 
-      const response = await userApi.getMyProfile(user.id);
+      const response = await userApi.getMyProfile(userData.id);
       if (response.success && (response.data as { success: boolean; profile: Record<string, unknown> })?.success) {
         const profileData = (response.data as { success: boolean; profile: Record<string, unknown> }).profile as typeof profile;
         setProfile(profileData);
@@ -53,7 +49,7 @@ function ProfileContent() {
     };
 
     fetchProfile();
-  }, [user]);
+  }, []);
 
   const handleEdit = () => {
     setEditing(true);
@@ -71,7 +67,9 @@ function ProfileContent() {
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    const user = JSON.parse(userStr);
 
     setSaving(true);
     setMessage('');

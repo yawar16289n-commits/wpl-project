@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -8,7 +9,6 @@ from routes import api_bp
 def create_app():
     app = Flask(__name__)
     
-    # Load configuration
     app.config.from_object(Config)
 
     CORS(app, origins=app.config['CORS_ORIGINS'])
@@ -26,4 +26,6 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5001))
+    host = os.environ.get('HOST', '127.0.0.1')
+    app.run(debug=True, host=host, port=port)

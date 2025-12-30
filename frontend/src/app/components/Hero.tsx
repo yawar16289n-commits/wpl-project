@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function Hero() {
   return (
@@ -13,9 +14,9 @@ export default function Hero() {
             Access world-class learning from universities and companies. Earn professional certificates and degrees online while working toward your personal and professional goals.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
-            <button className="bg-blue-600 text-white px-8 py-3 rounded font-medium hover:bg-blue-700 transition">
+            <Link href="/courses" className="bg-blue-600 text-white px-8 py-3 rounded font-medium hover:bg-blue-700 transition text-center">
               Explore Courses
-            </button>
+            </Link>
             <button className="border-2 border-gray-300 text-gray-900 px-8 py-3 rounded font-medium hover:bg-gray-100 transition">
               Try for Free
             </button>

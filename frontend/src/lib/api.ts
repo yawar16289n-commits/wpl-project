@@ -67,21 +67,21 @@ export const authApi = {
     password: string;
     role: 'learner' | 'instructor';
   }) => {
-    return apiCall('/auth/signup', {
+    return apiCall('/users/auth/signup', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
   },
 
   login: async (credentials: { email: string; password: string }) => {
-    return apiCall('/auth/login', {
+    return apiCall('/users/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
   },
 
   getUser: async (userId: number) => {
-    return apiCall(`/auth/users/${userId}`, {
+    return apiCall(`/users/${userId}`, {
       method: 'GET',
     });
   },
@@ -115,15 +115,15 @@ export const courseApi = {
   getCourses: async (filters?: {
     category?: string;
     level?: string;
-    search?: string;
+    q?: string;
   }) => {
     const params = new URLSearchParams();
     if (filters?.category) params.append('category', filters.category);
     if (filters?.level) params.append('level', filters.level);
-    if (filters?.search) params.append('search', filters.search);
+    if (filters?.q) params.append('q', filters.q);
 
     const query = params.toString() ? `?${params.toString()}` : '';
-    return apiCall(`/courses/${query}`, {
+    return apiCall(`/courses/search${query}`, {
       method: 'GET',
     });
   },
@@ -133,17 +133,37 @@ export const courseApi = {
       method: 'GET',
     });
   },
+
+  createCourse: async (courseData: any) => {
+    return apiCall('/courses/', {
+      method: 'POST',
+      body: JSON.stringify(courseData),
+    });
+  },
+
+  updateCourse: async (courseId: number, updates: any) => {
+    return apiCall(`/courses/${courseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteCourse: async (courseId: number) => {
+    return apiCall(`/courses/${courseId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 export const dashboardApi = {
   getStudentDashboard: async (userId: number) => {
-    return apiCall(`/dashboard/student/${userId}`, {
+    return apiCall(`/progress/dashboard/student/${userId}`, {
       method: 'GET',
     });
   },
 
   getInstructorDashboard: async (userId: number) => {
-    return apiCall(`/dashboard/instructor/${userId}`, {
+    return apiCall(`/progress/dashboard/instructor/${userId}`, {
       method: 'GET',
     });
   },
@@ -180,6 +200,184 @@ export const enrollmentApi = {
     const query = status ? `?status=${status}` : '';
     return apiCall(`/enrollments/user/${userId}${query}`, {
       method: 'GET',
+    });
+  },
+};
+
+export const reviewApi = {
+  createReview: async (courseId: number, userId: number, comment: string) => {
+    return apiCall('/reviews/', {
+      method: 'POST',
+      body: JSON.stringify({ course_id: courseId, user_id: userId, comment }),
+    });
+  },
+
+  getCourseReviews: async (courseId: number) => {
+    return apiCall(`/reviews/course/${courseId}`, {
+      method: 'GET',
+    });
+  },
+
+  updateReview: async (reviewId: number, comment: string) => {
+    return apiCall(`/reviews/${reviewId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ comment }),
+    });
+  },
+
+  deleteReview: async (reviewId: number) => {
+    return apiCall(`/reviews/${reviewId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const ratingApi = {
+  createRating: async (courseId: number, userId: number, rating: number) => {
+    return apiCall('/ratings/', {
+      method: 'POST',
+      body: JSON.stringify({ course_id: courseId, user_id: userId, rating }),
+    });
+  },
+
+  getCourseRatings: async (courseId: number) => {
+    return apiCall(`/ratings/course/${courseId}`, {
+      method: 'GET',
+    });
+  },
+
+  getUserRating: async (userId: number, courseId: number) => {
+    return apiCall(`/ratings/user/${userId}?course_id=${courseId}`, {
+      method: 'GET',
+    });
+  },
+
+  updateRating: async (ratingId: number, rating: number) => {
+    return apiCall(`/ratings/${ratingId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ rating }),
+    });
+  },
+
+  deleteRating: async (ratingId: number) => {
+    return apiCall(`/ratings/${ratingId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const lectureApi = {
+  createLecture: async (lectureData: {
+    course_id: number;
+    number: number;
+    title: string;
+    lessons?: number;
+    duration?: string;
+  }) => {
+    return apiCall('/lectures/', {
+      method: 'POST',
+      body: JSON.stringify(lectureData),
+    });
+  },
+
+  getCourseLectures: async (courseId: number) => {
+    return apiCall(`/lectures/?course_id=${courseId}`, {
+      method: 'GET',
+    });
+  },
+
+  getLecture: async (lectureId: number) => {
+    return apiCall(`/lectures/${lectureId}`, {
+      method: 'GET',
+    });
+  },
+
+  updateLecture: async (lectureId: number, updates: any) => {
+    return apiCall(`/lectures/${lectureId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteLecture: async (lectureId: number) => {
+    return apiCall(`/lectures/${lectureId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const lectureResourceApi = {
+  createResource: async (resourceData: {
+    lecture_id: number;
+    resource_type: 'video' | 'pdf' | 'link' | 'document' | 'quiz';
+    title: string;
+    url?: string;
+    content?: string;
+    duration?: string;
+    order?: number;
+  }) => {
+    return apiCall('/lecture-resources/', {
+      method: 'POST',
+      body: JSON.stringify(resourceData),
+    });
+  },
+
+  getLectureResources: async (lectureId: number) => {
+    return apiCall(`/lecture-resources/?lecture_id=${lectureId}`, {
+      method: 'GET',
+    });
+  },
+
+  getResource: async (resourceId: number) => {
+    return apiCall(`/lecture-resources/${resourceId}`, {
+      method: 'GET',
+    });
+  },
+
+  updateResource: async (resourceId: number, updates: any) => {
+    return apiCall(`/lecture-resources/${resourceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteResource: async (resourceId: number) => {
+    return apiCall(`/lecture-resources/${resourceId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const progressApi = {
+  createProgress: async (enrollmentId: number, progress: number) => {
+    return apiCall('/progress/', {
+      method: 'POST',
+      body: JSON.stringify({ enrollment_id: enrollmentId, progress }),
+    });
+  },
+
+  getProgress: async (enrollmentId: number) => {
+    return apiCall(`/progress/${enrollmentId}`, {
+      method: 'GET',
+    });
+  },
+
+  getUserProgress: async (userId: number) => {
+    return apiCall(`/progress/?user_id=${userId}`, {
+      method: 'GET',
+    });
+  },
+
+  updateProgress: async (enrollmentId: number, progress: number) => {
+    return apiCall(`/progress/${enrollmentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ progress }),
+    });
+  },
+
+  resetProgress: async (enrollmentId: number) => {
+    return apiCall(`/progress/${enrollmentId}`, {
+      method: 'DELETE',
     });
   },
 };
