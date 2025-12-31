@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from database import db
-from models import Rating, User, Course
+from models import Rating
 
 ratings_bp = Blueprint('ratings', __name__, url_prefix='/ratings')
 
@@ -22,23 +22,6 @@ def create_rating():
             'success': False,
             'error': 'Rating must be between 1 and 5'
         }), 400
-    
-    course = Course.query.get(data['course_id'])
-    user = User.query.get(data['user_id'])
-    
-    # Verify course exists
-    if not course:
-        return jsonify({
-            'success': False,
-            'error': 'Course not found'
-        }), 404
-    
-    # Verify user exists
-    if not user:
-        return jsonify({
-            'success': False,
-            'error': 'User not found'
-        }), 404
     
     # Check if user already rated this course
     existing_rating = Rating.query.filter_by(user_id=data['user_id'], course_id=data['course_id']).first()
@@ -70,114 +53,30 @@ def create_rating():
         'rating': new_rating.to_dict()
     }), 201
 
-
-# Get Ratings for Course (GET)
-@ratings_bp.route('/course/<int:course_id>', methods=['GET'])
-def get_course_ratings(course_id):
-    ratings = Rating.query.filter_by(course_id=course_id).all()
-    
-    return jsonify({
-        'success': True,
-        'ratings': [rating.to_dict() for rating in ratings]
-    }), 200
-
-
 # Get User's Ratings (GET)
 @ratings_bp.route('/user/<int:user_id>', methods=['GET'])
 def get_user_ratings(user_id):
     course_id = request.args.get('course_id')
     
     if course_id:
-        rating = Rating.query.filter_by(user_id=user_id, course_id=int(course_id)).first()
+        rating = Rating.query.filter_by(
+            user_id=user_id,
+            course_id=int(course_id),
+            status='active'
+        ).first()
         return jsonify({
             'success': True,
             'rating': rating.to_dict() if rating else None
         }), 200
     
-    ratings = Rating.query.filter_by(user_id=user_id).all()
+    ratings = Rating.query.filter_by(
+        user_id=user_id,
+        status='active'
+    ).all()
     
     return jsonify({
         'success': True,
         'ratings': [rating.to_dict() for rating in ratings]
-    }), 200
-
-
-# Get All Ratings (GET)
-@ratings_bp.route('/', methods=['GET'])
-def get_all_ratings():
-    ratings = Rating.query.all()
-    
-    return jsonify({
-        'success': True,
-        'ratings': [rating.to_dict() for rating in ratings]
-    }), 200
-
-
-# Get Rating by ID (GET)
-@ratings_bp.route('/<int:rating_id>', methods=['GET'])
-def get_rating(rating_id):
-    rating = Rating.query.get(rating_id)
-    
-    if not rating:
-        return jsonify({
-            'success': False,
-            'error': 'Rating not found'
-        }), 404
-    
-    return jsonify({
-        'success': True,
-        'rating': rating.to_dict()
-    }), 200
-
-
-# Update Rating (PUT)
-@ratings_bp.route('/<int:rating_id>', methods=['PUT'])
-def update_rating(rating_id):
-    data = request.get_json()
-    rating = Rating.query.get(rating_id)
-    
-    if not rating:
-        return jsonify({
-            'success': False,
-            'error': 'Rating not found'
-        }), 404
-    
-    # Validate rating value if provided
-    if 'rating' in data:
-        rating_value = data['rating']
-        if not isinstance(rating_value, int) or rating_value < 1 or rating_value > 5:
-            return jsonify({
-                'success': False,
-                'error': 'Rating must be between 1 and 5'
-            }), 400
-        rating.rating = rating_value
-    
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Rating updated successfully',
-        'rating': rating.to_dict()
-    }), 200
-
-
-# Delete Rating (DELETE)
-@ratings_bp.route('/<int:rating_id>', methods=['DELETE'])
-def delete_rating(rating_id):
-    rating = Rating.query.get(rating_id)
-    
-    if not rating:
-        return jsonify({
-            'success': False,
-            'error': 'Rating not found'
-        }), 404
-    
-    db.session.delete(rating)
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Rating deleted successfully'
     }), 200
 
 
@@ -185,6 +84,7 @@ def delete_rating(rating_id):
 @ratings_bp.route('/course/<int:course_id>/average', methods=['GET'])
 def get_average_rating(course_id):
     from models import Course
+    from sqlalchemy import func
     
     course = Course.query.get(course_id)
     if not course:
@@ -193,12 +93,40 @@ def get_average_rating(course_id):
             'error': 'Course not found'
         }), 404
     
-    # TODO: Calculate from Rating model when available
-    # For now, return course's rating field
+    # Calculate average rating from Rating table
+    rating_stats = db.session.query(
+        func.avg(Rating.rating).label('avg_rating'),
+        func.count(Rating.id).label('total_ratings')
+    ).filter(
+        Rating.course_id == course_id,
+        Rating.status == 'active'
+    ).first()
+    
+    avg_rating = float(rating_stats.avg_rating) if rating_stats.avg_rating else 0.0
+    total_ratings = rating_stats.total_ratings or 0
     
     return jsonify({
         'success': True,
         'course_id': course_id,
-        'average_rating': float(course.rating) if course.rating else 0.0,
-        'total_ratings': course.total_reviews
+        'average_rating': round(avg_rating, 1),
+        'total_ratings': total_ratings
+    }), 200
+
+
+# Delete Rating (DELETE)
+@ratings_bp.route('/<int:rating_id>', methods=['DELETE'])
+def delete_rating(rating_id):
+    rating = Rating.query.get(rating_id)
+    if not rating:
+        return jsonify({
+            'success': False,
+            'error': 'Rating not found'
+        }), 404
+    
+    rating.status = 'deleted'
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Rating deleted successfully'
     }), 200

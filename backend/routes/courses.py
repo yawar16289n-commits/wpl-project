@@ -1,63 +1,80 @@
 from flask import Blueprint, jsonify, request
-from models import Course, User
+from models import Course, User, CourseDetail
 from database import db
+import json
+from datetime import datetime
 
 courses_bp = Blueprint('courses', __name__, url_prefix='/courses')
 
 # Create Course (POST)
 @courses_bp.route('/', methods=['POST'])
 def create_course():
-    data = request.get_json()
-    
-    if not data or 'title' not in data or 'description' not in data or 'instructor_id' not in data or 'category' not in data:
+    try:
+        data = request.get_json()
+        
+        if not data or 'title' not in data or 'description' not in data or 'instructor_id' not in data or 'category' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'title, description, instructor_id, and category are required'
+            }), 400
+        
+        # Verify instructor exists
+        instructor = User.query.get(data['instructor_id'])
+        if not instructor:
+            return jsonify({
+                'success': False,
+                'error': 'Instructor not found'
+            }), 404
+        
+        if instructor.role != 'instructor':
+            return jsonify({
+                'success': False,
+                'error': 'User is not an instructor'
+            }), 400
+        
+        new_course = Course(
+            title=data['title'],
+            description=data['description'],
+            about=data.get('about'),
+            instructor_id=data['instructor_id'],
+            company=data.get('company'),
+            category=data['category'],
+            level=data.get('level', 'Beginner'),
+            duration=data.get('duration'),
+            image=data.get('image'),
+            status=data.get('status', 'unpublished'),
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(new_course)
+        db.session.commit()
+        
+        # Create CourseDetail if additional fields provided
+        if any(key in data for key in ['requirements', 'who_is_for', 'objectives']):
+            course_detail = CourseDetail(
+                course_id=new_course.id,
+                requirements=json.dumps(data.get('requirements', [])) if data.get('requirements') else None,
+                who_is_for=json.dumps(data.get('who_is_for', [])) if data.get('who_is_for') else None,
+                objectives=json.dumps(data.get('objectives', [])) if data.get('objectives') else None,
+                status='active'
+            )
+            db.session.add(course_detail)
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Course created successfully',
+            'course': new_course.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating course: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': 'title, description, instructor_id, and category are required'
-        }), 400
-    
-    # Verify instructor exists
-    instructor = User.query.get(data['instructor_id'])
-    if not instructor:
-        return jsonify({
-            'success': False,
-            'error': 'Instructor not found'
-        }), 404
-    
-    if instructor.role != 'instructor':
-        return jsonify({
-            'success': False,
-            'error': 'User is not an instructor'
-        }), 400
-    
-    from datetime import datetime
-    import json
-    
-    new_course = Course(
-        title=data['title'],
-        description=data['description'],
-        about=data.get('about'),
-        instructor_id=data['instructor_id'],
-        company=data.get('company'),
-        category=data['category'],
-        level=data.get('level', 'Beginner'),
-        duration=data.get('duration'),
-        image=data.get('image'),
-        language=data.get('language', 'English'),
-        subtitles=json.dumps(data.get('subtitles', [])) if data.get('subtitles') else None,
-        skills=json.dumps(data.get('skills', [])) if data.get('skills') else None,
-        learning_outcomes=json.dumps(data.get('learning_outcomes', [])) if data.get('learning_outcomes') else None,
-        is_published=data.get('is_published', False),
-        created_at=datetime.utcnow()
-    )
-    
-    db.session.add(new_course)
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Course created successfully',
-        'course': new_course.to_dict()
-    }), 201
+            'error': f'Failed to create course: {str(e)}'
+        }), 500
 
 
 # Get All Courses (GET)
@@ -66,9 +83,10 @@ def get_all_courses():
     category = request.args.get('category')
     level = request.args.get('level')
     instructor_id = request.args.get('instructor_id')
-    is_published = request.args.get('is_published')
+    status = request.args.get('status')
     
-    query = Course.query
+    # Default to showing only active courses for public
+    query = Course.query.filter(Course.status != 'deleted')
     
     if category:
         query = query.filter_by(category=category)
@@ -76,8 +94,11 @@ def get_all_courses():
         query = query.filter_by(level=level)
     if instructor_id:
         query = query.filter_by(instructor_id=instructor_id)
-    if is_published is not None:
-        query = query.filter_by(is_published=is_published.lower() == 'true')
+    if status:
+        query = query.filter_by(status=status)
+    else:
+        # If no status specified, only show active courses
+        query = query.filter_by(status='active')
     
     courses = query.all()
     
@@ -102,7 +123,7 @@ def get_course(course_id):
     
     return jsonify({
         'success': True,
-        'course': course.to_dict(include_instructor=True, include_modules=True)
+        'course': course.to_dict(include_instructor=True, include_modules=True, include_details=True)
     }), 200
 
 
@@ -118,7 +139,6 @@ def update_course(course_id):
         }), 404
     
     data = request.get_json()
-    import json
     
     if 'title' in data:
         course.title = data['title']
@@ -136,18 +156,29 @@ def update_course(course_id):
         course.duration = data['duration']
     if 'image' in data:
         course.image = data['image']
-    if 'language' in data:
-        course.language = data['language']
-    if 'subtitles' in data:
-        course.subtitles = json.dumps(data['subtitles'])
-    if 'skills' in data:
-        course.skills = json.dumps(data['skills'])
-    if 'learning_outcomes' in data:
-        course.learning_outcomes = json.dumps(data['learning_outcomes'])
-    if 'is_published' in data:
-        course.is_published = data['is_published']
+    if 'status' in data:
+        course.status = data['status']
     
     db.session.commit()
+    
+    # Update CourseDetail if any detail fields provided
+    detail_fields = ['skills', 'requirements', 'who_is_for', 'objectives']
+    if any(key in data for key in detail_fields):
+        course_detail = CourseDetail.query.filter_by(course_id=course_id).first()
+        if not course_detail:
+            course_detail = CourseDetail(course_id=course_id, status='active')
+            db.session.add(course_detail)
+        
+        if 'skills' in data:
+            course_detail.skills = json.dumps(data['skills'])
+        if 'requirements' in data:
+            course_detail.requirements = json.dumps(data['requirements'])
+        if 'who_is_for' in data:
+            course_detail.who_is_for = json.dumps(data['who_is_for'])
+        if 'objectives' in data:
+            course_detail.objectives = json.dumps(data['objectives'])
+        
+        db.session.commit()
     
     return jsonify({
         'success': True,
@@ -167,7 +198,8 @@ def delete_course(course_id):
             'error': 'Course not found'
         }), 404
     
-    db.session.delete(course)
+    # Soft delete by setting status to 'deleted'
+    course.status = 'deleted'
     db.session.commit()
     
     return jsonify({
@@ -188,7 +220,8 @@ def search_courses():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
-    query = Course.query.join(User)
+    # Only show active courses for public search
+    query = Course.query.join(User).filter(Course.status == 'active')
     
     if q:
         pattern = f'%{q}%'
@@ -205,13 +238,10 @@ def search_courses():
         query = query.filter(Course.level == level)
     
     # Sorting
-    if sort == 'rating':
-        query = query.order_by(Course.rating.desc())
-    elif sort == 'students':
-        query = query.order_by(Course.total_students.desc())
-    elif sort == 'title':
+    if sort == 'title':
         query = query.order_by(Course.title)
     else:
+        # Default to newest first
         query = query.order_by(Course.created_at.desc())
     
     paginated = query.paginate(page=page, per_page=per_page)

@@ -89,24 +89,59 @@ export const authApi = {
 
 export const userApi = {
   getPublicProfile: async (userId: number) => {
-    return apiCall(`/users/profile/${userId}`, {
+    return apiCall(`/profiles/${userId}`, {
       method: 'GET',
     });
   },
 
   getMyProfile: async (userId: number) => {
-    return apiCall(`/users/my-profile/${userId}`, {
+    return apiCall(`/profiles/my-profile/${userId}`, {
       method: 'GET',
     });
   },
 
   updateProfile: async (
     userId: number,
-    updates: { name?: string; bio?: string; profile_picture?: string }
+    updates: { 
+      name?: string; 
+      bio?: string; 
+      profile_picture?: string;
+      password?: string;
+      current_password?: string;
+    }
   ) => {
-    return apiCall(`/users/profile/${userId}`, {
+    return apiCall(`/profiles/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
+    });
+  },
+
+  deleteUser: async (userId: number) => {
+    return apiCall(`/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-User-Id': userId.toString(),
+      },
+    });
+  },
+};
+
+export const adminApi = {
+  getDashboardStats: async () => {
+    return apiCall('/dashboard/admin', {
+      method: 'GET',
+    });
+  },
+
+  getAllUsers: async (status: string = 'active') => {
+    return apiCall(`/admin/users?status=${status}`, {
+      method: 'GET',
+    });
+  },
+
+  deleteUser: async (userId: number) => {
+    return apiCall(`/admin/users/${userId}`, {
+      method: 'DELETE',
     });
   },
 };
@@ -157,13 +192,13 @@ export const courseApi = {
 
 export const dashboardApi = {
   getStudentDashboard: async (userId: number) => {
-    return apiCall(`/progress/dashboard/student/${userId}`, {
+    return apiCall(`/dashboard/student/${userId}`, {
       method: 'GET',
     });
   },
 
   getInstructorDashboard: async (userId: number) => {
-    return apiCall(`/progress/dashboard/instructor/${userId}`, {
+    return apiCall(`/dashboard/instructor/${userId}`, {
       method: 'GET',
     });
   },
@@ -186,13 +221,6 @@ export const enrollmentApi = {
   checkEnrollment: async (userId: number, courseId: number) => {
     return apiCall(`/enrollments/check/${userId}/${courseId}`, {
       method: 'GET',
-    });
-  },
-
-  updateProgress: async (enrollmentId: number, progress: number) => {
-    return apiCall(`/enrollments/${enrollmentId}/progress`, {
-      method: 'PUT',
-      body: JSON.stringify({ progress }),
     });
   },
 
@@ -249,13 +277,6 @@ export const ratingApi = {
   getUserRating: async (userId: number, courseId: number) => {
     return apiCall(`/ratings/user/${userId}?course_id=${courseId}`, {
       method: 'GET',
-    });
-  },
-
-  updateRating: async (ratingId: number, rating: number) => {
-    return apiCall(`/ratings/${ratingId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ rating }),
     });
   },
 
@@ -349,7 +370,75 @@ export const lectureResourceApi = {
 };
 
 export const progressApi = {
+  // New Progress Tracking API (v2)
+  
+  // Mark a lecture resource as complete
+  markLectureComplete: async (enrollmentId: number, lectureResourceId: number) => {
+    return apiCall('/progress/complete', {
+      method: 'POST',
+      body: JSON.stringify({
+        enrollment_id: enrollmentId,
+        lecture_resource_id: lectureResourceId,
+      }),
+    });
+  },
+
+  // Mark a lecture resource as uncomplete
+  markLectureUncomplete: async (enrollmentId: number, lectureResourceId: number) => {
+    return apiCall('/progress/uncomplete', {
+      method: 'POST',
+      body: JSON.stringify({
+        enrollment_id: enrollmentId,
+        lecture_resource_id: lectureResourceId,
+      }),
+    });
+  },
+
+  // Get course progress percentage
+  getCourseProgress: async (enrollmentId: number) => {
+    return apiCall(`/progress/course/${enrollmentId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Get next incomplete lecture (Continue Learning)
+  getNextLecture: async (enrollmentId: number) => {
+    return apiCall(`/progress/next/${enrollmentId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Get all progress for a user
+  getUserProgress: async (userId: number) => {
+    return apiCall(`/progress/user/${userId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Get completed lectures for an enrollment
+  getCompletedLectures: async (enrollmentId: number) => {
+    return apiCall(`/progress/completed/${enrollmentId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Reset progress for a specific lecture
+  resetLectureProgress: async (enrollmentId: number, lectureResourceId: number) => {
+    return apiCall(`/progress/reset/${enrollmentId}/${lectureResourceId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Reset all progress for a course
+  resetCourseProgress: async (enrollmentId: number) => {
+    return apiCall(`/progress/reset/course/${enrollmentId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Legacy endpoints (deprecated, kept for backward compatibility)
   createProgress: async (enrollmentId: number, progress: number) => {
+    console.warn('createProgress is deprecated. Use markLectureComplete instead.');
     return apiCall('/progress/', {
       method: 'POST',
       body: JSON.stringify({ enrollment_id: enrollmentId, progress }),
@@ -357,18 +446,12 @@ export const progressApi = {
   },
 
   getProgress: async (enrollmentId: number) => {
-    return apiCall(`/progress/${enrollmentId}`, {
-      method: 'GET',
-    });
-  },
-
-  getUserProgress: async (userId: number) => {
-    return apiCall(`/progress/?user_id=${userId}`, {
-      method: 'GET',
-    });
+    // Redirect to new endpoint
+    return progressApi.getCourseProgress(enrollmentId);
   },
 
   updateProgress: async (enrollmentId: number, progress: number) => {
+    console.warn('updateProgress is deprecated. Use markLectureComplete instead.');
     return apiCall(`/progress/${enrollmentId}`, {
       method: 'PUT',
       body: JSON.stringify({ progress }),
@@ -376,29 +459,12 @@ export const progressApi = {
   },
 
   resetProgress: async (enrollmentId: number) => {
-    return apiCall(`/progress/${enrollmentId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  markLessonComplete: async (
-    userId: number,
-    courseId: number,
-    lectureId: number,
-    lessonId: number
-  ) => {
-    return apiCall('/progress/lesson/complete', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        course_id: courseId,
-        lecture_id: lectureId,
-        lesson_id: lessonId,
-      }),
-    });
+    // Redirect to new endpoint
+    return progressApi.resetCourseProgress(enrollmentId);
   },
 
   getLessonProgress: async (userId: number, courseId: number) => {
+    console.warn('getLessonProgress is deprecated. Use getCompletedLectures with enrollmentId instead.');
     return apiCall(`/progress/lessons?user_id=${userId}&course_id=${courseId}`, {
       method: 'GET',
     });

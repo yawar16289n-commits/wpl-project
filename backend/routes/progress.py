@@ -1,415 +1,429 @@
 from flask import Blueprint, jsonify, request
-from models import Enrollment
+from models import User, Course, Enrollment, LectureResource, CourseModule, Progress
 from database import db
+from datetime import datetime
 
 progress_bp = Blueprint('progress', __name__, url_prefix='/progress')
 
-# Create Progress (POST)
-@progress_bp.route('/', methods=['POST'])
-def create_progress():
-    data = request.get_json()
-    
-    if not data or 'enrollment_id' not in data or 'progress' not in data:
-        return jsonify({
-            'success': False,
-            'error': 'enrollment_id and progress are required'
-        }), 400
-    
-    enrollment = Enrollment.query.get(data['enrollment_id'])
-    
+
+def initialize_progress_for_enrollment(enrollment_id):
+    """Create Progress rows for all lectures in the course for a new enrollment"""
+    enrollment = Enrollment.query.get(enrollment_id)
     if not enrollment:
-        return jsonify({
-            'success': False,
-            'error': 'Enrollment not found'
-        }), 404
-    
-    # Validate progress value
-    progress_value = data['progress']
-    if not isinstance(progress_value, int) or progress_value < 0 or progress_value > 100:
-        return jsonify({
-            'success': False,
-            'error': 'Progress must be between 0 and 100'
-        }), 400
-    
-    enrollment.progress = progress_value
-    
-    # Update status if completed
-    if progress_value == 100:
-        enrollment.status = 'completed'
-        from datetime import datetime
-        enrollment.completed_at = datetime.utcnow()
+        return
+
+    lectures = LectureResource.query.join(
+        CourseModule, LectureResource.lecture_id == CourseModule.id
+    ).filter(
+        CourseModule.course_id == enrollment.course_id,
+        LectureResource.status == 'active',
+        CourseModule.status == 'active'
+    ).all()
+
+    for lecture in lectures:
+        progress = Progress(
+            enrollment_id=enrollment_id,
+            lecture_resource_id=lecture.id,
+            completed=False,
+            status='active'
+        )
+        db.session.add(progress)
     
     db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Progress created successfully',
-        'progress': {
-            'enrollment_id': enrollment.id,
-            'user_id': enrollment.user_id,
-            'course_id': enrollment.course_id,
-            'progress': enrollment.progress,
-            'status': enrollment.status
-        }
-    }), 201
 
 
-# Get All Progress (GET)
-@progress_bp.route('/', methods=['GET'])
-def get_all_progress():
-    user_id = request.args.get('user_id')
-    course_id = request.args.get('course_id')
-    
-    query = Enrollment.query
-    
-    if user_id:
-        query = query.filter_by(user_id=user_id)
-    if course_id:
-        query = query.filter_by(course_id=course_id)
-    
-    enrollments = query.all()
-    
-    progress_list = [{
-        'enrollment_id': e.id,
-        'user_id': e.user_id,
-        'course_id': e.course_id,
-        'progress': e.progress,
-        'status': e.status
-    } for e in enrollments]
-    
-    return jsonify({
-        'success': True,
-        'progress': progress_list
-    }), 200
-
-
-# Get Progress by Enrollment ID (GET)
-@progress_bp.route('/<int:enrollment_id>', methods=['GET'])
-def get_progress(enrollment_id):
-    enrollment = Enrollment.query.get(enrollment_id)
-    
-    if not enrollment:
-        return jsonify({
-            'success': False,
-            'error': 'Progress not found'
-        }), 404
-    
-    return jsonify({
-        'success': True,
-        'progress': {
-            'enrollment_id': enrollment.id,
-            'user_id': enrollment.user_id,
-            'course_id': enrollment.course_id,
-            'progress': enrollment.progress,
-            'status': enrollment.status,
-            'enrolled_at': enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
-            'completed_at': enrollment.completed_at.isoformat() if enrollment.completed_at else None
-        }
-    }), 200
-
-
-# Update Progress (PUT)
-@progress_bp.route('/<int:enrollment_id>', methods=['PUT'])
-def update_progress(enrollment_id):
-    enrollment = Enrollment.query.get(enrollment_id)
-    
-    if not enrollment:
-        return jsonify({
-            'success': False,
-            'error': 'Progress not found'
-        }), 404
-    
+# Mark Lecture Resource as Complete
+@progress_bp.route('/complete', methods=['POST'])
+def mark_lecture_complete():
     data = request.get_json()
     
-    if 'progress' in data:
-        progress_value = data['progress']
+    # Support both enrollment_id and course_id+user_id
+    enrollment_id = data.get('enrollment_id')
+    
+    if not enrollment_id:
+        # Try to find enrollment by course_id and user_id
+        course_id = data.get('course_id')
+        user_id = data.get('user_id')
         
-        # Validate progress value
-        if not isinstance(progress_value, int) or progress_value < 0 or progress_value > 100:
+        if not course_id or not user_id:
             return jsonify({
                 'success': False,
-                'error': 'Progress must be between 0 and 100'
+                'error': 'Either enrollment_id or (course_id and user_id) are required'
             }), 400
         
-        enrollment.progress = progress_value
+        enrollment = Enrollment.query.filter_by(
+            course_id=course_id,
+            user_id=user_id
+        ).filter(
+            Enrollment.status.in_(['active', 'completed'])
+        ).first()
         
-        # Update status if completed
-        if progress_value == 100:
-            enrollment.status = 'completed'
-            from datetime import datetime
-            enrollment.completed_at = datetime.utcnow()
+        if not enrollment:
+            return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
+        
+        enrollment_id = enrollment.id
+    else:
+        enrollment = Enrollment.query.get(enrollment_id)
+        if not enrollment or enrollment.status in ['deleted', 'dropped']:
+            return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
     
+    if 'lecture_resource_id' not in data:
+        return jsonify({'success': False, 'error': 'lecture_resource_id is required'}), 400
+
+    lecture_resource = LectureResource.query.get(data['lecture_resource_id'])
+    if not lecture_resource or lecture_resource.status == 'deleted':
+        return jsonify({'success': False, 'error': 'Lecture resource not found'}), 404
+
+    progress = Progress.query.filter_by(
+        enrollment_id=enrollment_id,
+        lecture_resource_id=lecture_resource.id,
+        status='active'
+    ).first()
+
+    if progress:
+        progress.completed = True
+        progress.completed_at = datetime.utcnow()
+    else:
+        # Create progress if it doesn't exist (should normally exist)
+        progress = Progress(
+            enrollment_id=enrollment_id,
+            lecture_resource_id=lecture_resource.id,
+            completed=True,
+            completed_at=datetime.utcnow(),
+            status='active'
+        )
+        db.session.add(progress)
+
+    # Update course completion if all lectures completed
+    total_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, status='active').count()
+    completed_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, completed=True, status='active').count()
+    course_progress = int((completed_lectures / total_lectures) * 100) if total_lectures else 0
+
+    if course_progress >= 100:
+        enrollment.status = 'completed'
+        enrollment.completed_at = datetime.utcnow()
+    else:
+        enrollment.status = 'active'
+        enrollment.completed_at = None
+
     db.session.commit()
-    
+
     return jsonify({
         'success': True,
-        'message': 'Progress updated successfully',
+        'message': 'Lecture marked as complete',
         'progress': {
-            'enrollment_id': enrollment.id,
-            'user_id': enrollment.user_id,
-            'course_id': enrollment.course_id,
-            'progress': enrollment.progress,
-            'status': enrollment.status
+            'lecture_resource_id': lecture_resource.id,
+            'completed': True,
+            'course_progress': course_progress,
+            'enrollment_id': enrollment_id
         }
     }), 200
 
 
-# Delete Progress (DELETE)
-@progress_bp.route('/<int:enrollment_id>', methods=['DELETE'])
-def delete_progress(enrollment_id):
-    enrollment = Enrollment.query.get(enrollment_id)
+# Mark Lecture Resource as Uncomplete
+@progress_bp.route('/uncomplete', methods=['POST'])
+def mark_lecture_uncomplete():
+    data = request.get_json()
     
-    if not enrollment:
-        return jsonify({
-            'success': False,
-            'error': 'Progress not found'
-        }), 404
+    # Support both enrollment_id and course_id+user_id
+    enrollment_id = data.get('enrollment_id')
     
-    # Reset progress
-    enrollment.progress = 0
-    enrollment.status = 'active'
-    enrollment.completed_at = None
+    if not enrollment_id:
+        # Try to find enrollment by course_id and user_id
+        course_id = data.get('course_id')
+        user_id = data.get('user_id')
+        
+        if not course_id or not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Either enrollment_id or (course_id and user_id) are required'
+            }), 400
+        
+        enrollment = Enrollment.query.filter_by(
+            course_id=course_id,
+            user_id=user_id
+        ).filter(
+            Enrollment.status.in_(['active', 'completed'])
+        ).first()
+        
+        if not enrollment:
+            return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
+        
+        enrollment_id = enrollment.id
+    else:
+        enrollment = Enrollment.query.get(enrollment_id)
+        if not enrollment or enrollment.status in ['deleted', 'dropped']:
+            return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
     
+    if 'lecture_resource_id' not in data:
+        return jsonify({'success': False, 'error': 'lecture_resource_id is required'}), 400
+
+    lecture_resource = LectureResource.query.get(data['lecture_resource_id'])
+    if not lecture_resource or lecture_resource.status == 'deleted':
+        return jsonify({'success': False, 'error': 'Lecture resource not found'}), 404
+
+    progress = Progress.query.filter_by(
+        enrollment_id=enrollment_id,
+        lecture_resource_id=lecture_resource.id,
+        status='active'
+    ).first()
+
+    if progress:
+        progress.completed = False
+        progress.completed_at = None
+    else:
+        # Create progress if it doesn't exist
+        progress = Progress(
+            enrollment_id=enrollment_id,
+            lecture_resource_id=lecture_resource.id,
+            completed=False,
+            status='active'
+        )
+        db.session.add(progress)
+
+    # Update enrollment status
+    total_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, status='active').count()
+    completed_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, completed=True, status='active').count()
+    course_progress = int((completed_lectures / total_lectures) * 100) if total_lectures else 0
+
+    if course_progress < 100:
+        enrollment.status = 'active'
+        enrollment.completed_at = None
+
     db.session.commit()
-    
+
     return jsonify({
         'success': True,
-        'message': 'Progress reset successfully'
+        'message': 'Lecture marked as incomplete',
+        'progress': {
+            'lecture_resource_id': lecture_resource.id,
+            'completed': False,
+            'course_progress': course_progress,
+            'enrollment_id': enrollment_id
+        }
     }), 200
 
 
-# Mark Lesson as Complete (POST)
-@progress_bp.route('/lesson/complete', methods=['POST'])
-def mark_lesson_complete():
-    from models import Progress, CourseModule, LectureResource
-    from datetime import datetime
-    import json
-    
+# Create Enrollment (POST)
+@progress_bp.route('/', methods=['POST'])
+def enroll_in_course():
     data = request.get_json()
     
-    if not data or 'user_id' not in data or 'course_id' not in data or 'lecture_id' not in data or 'lesson_id' not in data:
-        return jsonify({
-            'success': False,
-            'error': 'user_id, course_id, lecture_id, and lesson_id are required'
-        }), 400
+    if not data or 'user_id' not in data or 'course_id' not in data:
+        return jsonify({'success': False, 'error': 'user_id and course_id are required'}), 400
     
     user_id = data['user_id']
     course_id = data['course_id']
-    lecture_id = data['lecture_id']
-    lesson_id = data['lesson_id']
-    
-    # Get or create progress record for this lecture
-    progress = Progress.query.filter_by(
-        user_id=user_id,
-        course_id=course_id,
-        lecture_id=lecture_id
-    ).first()
-    
-    if not progress:
-        progress = Progress(
-            user_id=user_id,
-            course_id=course_id,
-            lecture_id=lecture_id,
-            completed_lectures=json.dumps([lesson_id]),
-            current_lecture=lecture_id,
-            last_accessed=datetime.utcnow()
-        )
-        db.session.add(progress)
-    else:
-        completed = json.loads(progress.completed_lectures or '[]')
-        if lesson_id not in completed:
-            completed.append(lesson_id)
-            progress.completed_lectures = json.dumps(completed)
-        progress.last_accessed = datetime.utcnow()
-    
-    # Update enrollment progress percentage
-    enrollment = Enrollment.query.filter_by(
-        user_id=user_id,
-        course_id=course_id
-    ).first()
-    
-    if enrollment:
-        # Calculate total lessons in course
-        total_lessons = db.session.query(LectureResource).join(CourseModule).filter(
-            CourseModule.course_id == course_id,
-            LectureResource.deleted_at == None,
-            CourseModule.deleted_at == None
-        ).count()
-        
-        # Calculate total completed lessons across all lectures
-        all_progress = Progress.query.filter_by(
-            user_id=user_id,
-            course_id=course_id
-        ).all()
-        
-        total_completed = 0
-        for p in all_progress:
-            completed_list = json.loads(p.completed_lectures or '[]')
-            total_completed += len(completed_list)
-        
-        # Calculate progress percentage
-        if total_lessons > 0:
-            enrollment.progress = min(int((total_completed / total_lessons) * 100), 100)
-        
-        # Mark as completed if 100%
-        if enrollment.progress >= 100:
-            enrollment.status = 'completed'
-            enrollment.completed_at = datetime.utcnow()
-    
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Lesson marked as complete',
-        'progress': enrollment.progress if enrollment else 0,
-        'total_completed': total_completed if enrollment else 0,
-        'total_lessons': total_lessons if enrollment else 0
-    }), 200
-
-
-# Get Lesson Progress for User (GET)
-@progress_bp.route('/lessons', methods=['GET'])
-def get_lesson_progress():
-    from models import Progress
-    import json
-    
-    user_id = request.args.get('user_id')
-    course_id = request.args.get('course_id')
-    
-    if not user_id or not course_id:
-        return jsonify({
-            'success': False,
-            'error': 'user_id and course_id are required'
-        }), 400
-    
-    progress_records = Progress.query.filter_by(
-        user_id=user_id,
-        course_id=course_id
-    ).all()
-    
-    completed_lessons = {}
-    for p in progress_records:
-        lecture_id = p.lecture_id
-        completed = json.loads(p.completed_lectures or '[]')
-        completed_lessons[lecture_id] = completed
-    
-    return jsonify({
-        'success': True,
-        'completed_lessons': completed_lessons
-    }), 200
-
-
-# Dashboard Endpoints (migrated from dashboard.py)
-@progress_bp.route('/dashboard/student/<int:user_id>', methods=['GET'])
-def get_student_dashboard(user_id):
-    from models import User, Course
     
     user = User.query.get(user_id)
     if not user:
-        return jsonify({
-            'success': False,
-            'error': 'User not found'
-        }), 404
+        return jsonify({'success': False, 'error': 'User not found'}), 404
     
-    enrollments = Enrollment.query.filter_by(user_id=user_id).all()
+    if user.role == 'instructor':
+        return jsonify({'success': False, 'error': 'Instructors cannot enroll in courses'}), 403
     
-    in_progress = []
-    completed = []
+    course = Course.query.get(course_id)
+    if not course or course.status != 'active':
+        return jsonify({'success': False, 'error': 'Course not available'}), 404
     
-    for enrollment in enrollments:
-        course = Course.query.get(enrollment.course_id)
-        if course:
-            enrollment_data = {
-                'id': enrollment.id,
-                'user_id': enrollment.user_id,
-                'course_id': enrollment.course_id,
-                'progress': enrollment.progress,
-                'status': enrollment.status,
-                'enrolled_at': enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
-                'completed_at': enrollment.completed_at.isoformat() if enrollment.completed_at else None,
-                'course': course.to_dict(include_instructor=True)
-            }
-            
-            if enrollment.status == 'completed':
-                completed.append(enrollment_data)
-            else:
-                in_progress.append(enrollment_data)
+    # Always create a new enrollment for re-enrollment
+    new_enrollment = Enrollment(
+        user_id=user_id,
+        course_id=course_id,
+        status='active',
+        enrolled_at=datetime.utcnow()
+    )
+    db.session.add(new_enrollment)
+    db.session.commit()
+
+    # Initialize progress rows for this enrollment
+    initialize_progress_for_enrollment(new_enrollment.id)
     
     return jsonify({
         'success': True,
-        'dashboard': {
-            'user': user.to_dict(),
-            'enrolled_courses': {
-                'in_progress': in_progress,
-                'completed': completed
-            },
-            'stats': {
-                'total_enrolled': len(enrollments),
-                'in_progress': len(in_progress),
-                'completed': len(completed),
-                'average_progress': sum(e.progress for e in enrollments) // len(enrollments) if enrollments else 0
-            }
+        'message': 'Enrolled in course successfully',
+        'enrollment': new_enrollment.to_dict()
+    }), 201
+
+
+# Get User Enrollments (GET)
+@progress_bp.route('/user/<int:user_id>', methods=['GET'])
+def get_user_enrollments(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    
+    enrollments = Enrollment.query.filter(
+        Enrollment.user_id == user_id,
+        Enrollment.status.in_(['active', 'completed'])
+    ).all()
+    
+    return jsonify({
+        'success': True,
+        'enrollments': [
+            {
+                'enrollment_id': e.id,
+                'course_id': e.course_id,
+                'progress': e.progress,  # computed from Progress table
+                'status': e.status
+            } for e in enrollments
+        ],
+        'total': len(enrollments)
+    }), 200
+
+
+# Unenroll (soft delete)
+@progress_bp.route('/<int:enrollment_id>', methods=['DELETE'])
+def unenroll(enrollment_id):
+    enrollment = Enrollment.query.get(enrollment_id)
+    if not enrollment or enrollment.status == 'deleted':
+        return jsonify({'success': False, 'error': 'Enrollment not found or already deleted'}), 404
+
+    enrollment.status = 'deleted'
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Enrollment deleted successfully'}), 200
+
+    return jsonify({'success': True, 'message': 'Progress records deleted'}), 200
+
+
+# Get Course Progress
+@progress_bp.route('/course/<int:enrollment_id>', methods=['GET'])
+def get_course_progress(enrollment_id):
+    enrollment = Enrollment.query.get(enrollment_id)
+    if not enrollment or enrollment.status in ['deleted', 'dropped']:
+        return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
+
+    total_lectures = Progress.query.filter_by(enrollment_id=enrollment.id, status='active').count()
+    completed_lectures = Progress.query.filter_by(enrollment_id=enrollment.id, completed=True, status='active').count()
+    progress_percentage = int((completed_lectures / total_lectures) * 100) if total_lectures else 0
+
+    return jsonify({
+        'success': True,
+        'progress': {
+            'enrollment_id': enrollment.id,
+            'course_id': enrollment.course_id,
+            'user_id': enrollment.user_id,
+            'progress_percentage': progress_percentage,
+            'status': enrollment.status
         }
     }), 200
 
 
-@progress_bp.route('/dashboard/instructor/<int:user_id>', methods=['GET'])
-def get_instructor_dashboard(user_id):
-    try:
-        from models import User, Course
-        
-        user = User.query.get(user_id)
-        if not user or user.role != 'instructor':
-            return jsonify({
-                'success': False,
-                'error': 'Instructor not found'
-            }), 404
-        
-        # Filter out deleted courses
-        courses = Course.query.filter_by(instructor_id=user_id).filter(Course.deleted_at == None).all()
-        
-        published = []
-        drafts = []
-        total_students = 0
-        total_rating = 0
-        
-        for course in courses:
-            # Filter out deleted enrollments
-            enrollments = Enrollment.query.filter_by(course_id=course.id).filter(Enrollment.deleted_at == None).all()
-            total_students += len(enrollments)
-            total_rating += float(course.rating) if course.rating else 0
-            
-            course_data = course.to_dict()
-            course_data['enrollments'] = len(enrollments)
-            course_data['completed_students'] = len([e for e in enrollments if e.status == 'completed'])
-            
-            if course.is_published:
-                published.append(course_data)
-            else:
-                drafts.append(course_data)
-        
-        return jsonify({
-            'success': True,
-            'dashboard': {
-                'user': user.to_dict(),
-                'created_courses': {
-                    'published': published,
-                    'drafts': drafts
-                },
-                'stats': {
-                    'total_courses': len(courses),
-                    'published': len(published),
-                    'drafts': len(drafts),
-                    'total_students': total_students,
-                    'average_rating': total_rating / len(courses) if courses else 0
-                }
-            }
-        }), 200
-    except Exception as e:
-        import traceback
-        print(f"Error in instructor dashboard: {str(e)}")
-        print(traceback.format_exc())
+# Get all completed lectures
+@progress_bp.route('/completed/<int:enrollment_id>', methods=['GET'])
+def get_completed_lectures(enrollment_id):
+    enrollment = Enrollment.query.get(enrollment_id)
+    if not enrollment:
         return jsonify({
             'success': False,
-            'error': f"Internal Server Error: {str(e)}"
-        }), 500
+            'error': 'Enrollment not found',
+            'completed_lectures': []
+        }), 404
+    
+    if enrollment.status in ['deleted', 'dropped']:
+        return jsonify({
+            'success': True,
+            'message': 'Enrollment is not active',
+            'completed_lectures': []
+        }), 200
+
+    completed = Progress.query.filter_by(enrollment_id=enrollment.id, completed=True, status='active').all()
+    completed_list = []
+    for p in completed:
+        lecture = LectureResource.query.get(p.lecture_resource_id)
+        if lecture:
+            completed_list.append({
+                'lecture_resource_id': lecture.id,
+                'title': lecture.title,
+                'resource_type': lecture.resource_type,
+                'completed_at': p.completed_at.isoformat() if p.completed_at else None
+            })
+
+    return jsonify({'success': True, 'completed_lectures': completed_list}), 200
+
+
+# Student Dashboard
+@progress_bp.route('/dashboard/student/<int:user_id>', methods=['GET'])
+def get_student_dashboard(user_id):
+    from models import Course, User
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    
+    enrollments = Enrollment.query.filter_by(
+        user_id=user_id
+    ).filter(
+        Enrollment.status.in_(['active', 'completed'])
+    ).all()
+    
+    courses_with_progress = []
+    for enrollment in enrollments:
+        course = Course.query.get(enrollment.course_id)
+        if not course or course.status != 'active':
+            continue
+        
+        total_lectures = Progress.query.filter_by(enrollment_id=enrollment.id, status='active').count()
+        completed_lectures = Progress.query.filter_by(enrollment_id=enrollment.id, completed=True, status='active').count()
+        progress_percentage = int((completed_lectures / total_lectures) * 100) if total_lectures else 0
+        
+        courses_with_progress.append({
+            'enrollment_id': enrollment.id,
+            'course': course.to_dict(include_instructor=True),
+            'progress_percentage': progress_percentage,
+            'enrolled_at': enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
+            'status': enrollment.status
+        })
+    
+    return jsonify({
+        'success': True,
+        'courses': courses_with_progress,
+        'total': len(courses_with_progress)
+    }), 200
+
+
+# Instructor Dashboard
+@progress_bp.route('/dashboard/instructor/<int:user_id>', methods=['GET'])
+def get_instructor_dashboard(user_id):
+    from models import Course, User
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    
+    if user.role != 'instructor':
+        return jsonify({'success': False, 'error': 'User is not an instructor'}), 403
+    
+    courses = Course.query.filter_by(
+        instructor_id=user_id
+    ).filter(
+        Course.status.in_(['active', 'unpublished'])
+    ).all()
+    
+    courses_with_stats = []
+    for course in courses:
+        total_enrollments = Enrollment.query.filter_by(
+            course_id=course.id
+        ).filter(
+            Enrollment.status.in_(['active', 'completed'])
+        ).count()
+        
+        completed_enrollments = Enrollment.query.filter_by(
+            course_id=course.id,
+            status='completed'
+        ).count()
+        
+        courses_with_stats.append({
+            'course': course.to_dict(include_stats=True),
+            'total_students': total_enrollments,
+            'completed_students': completed_enrollments,
+            'rating': course.rating,
+            'total_reviews': course.total_reviews
+        })
+    
+    return jsonify({
+        'success': True,
+        'courses': courses_with_stats,
+        'total': len(courses_with_stats)
+    }), 200

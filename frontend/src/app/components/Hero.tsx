@@ -17,21 +17,19 @@ export default function Hero() {
             <Link href="/courses" className="bg-blue-600 text-white px-8 py-3 rounded font-medium hover:bg-blue-700 transition text-center">
               Explore Courses
             </Link>
-            <button className="border-2 border-gray-300 text-gray-900 px-8 py-3 rounded font-medium hover:bg-gray-100 transition">
-              Try for Free
-            </button>
           </div>
         </div>
 
-        <div className="relative">
-          <Image 
-            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400'%3E%3Crect fill='%23ddd' width='600' height='400'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' fill='%23999' text-anchor='middle' dominant-baseline='middle'%3ECourse Image%3C/text%3E%3C/svg%3E"
-            alt="Learning"
-            width={600}
-            height={400}
-            className="rounded-2xl shadow-2xl w-full h-auto"
-          />
-        </div>
+   <div className="relative">
+  <Image
+    src="https://images.unsplash.com/photo-1457369804613-52c61a468e7d?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    alt="Learning"
+    width={600}
+    height={400}
+    className="rounded-2xl shadow-2xl w-full h-auto"
+  />
+</div>
+
 
       </div>
     </section>

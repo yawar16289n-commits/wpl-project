@@ -49,9 +49,14 @@ def get_all_lecture_resources():
     lecture_id = request.args.get('lecture_id')
     
     if lecture_id:
-        resources = LectureResource.query.filter_by(lecture_id=lecture_id).order_by(LectureResource.order).all()
+        resources = LectureResource.query.filter_by(
+            lecture_id=lecture_id,
+            status='active'
+        ).order_by(LectureResource.order).all()
     else:
-        resources = LectureResource.query.order_by(LectureResource.lecture_id, LectureResource.order).all()
+        resources = LectureResource.query.filter_by(
+            status='active'
+        ).order_by(LectureResource.lecture_id, LectureResource.order).all()
     
     return jsonify({
         'success': True,
@@ -122,7 +127,8 @@ def delete_lecture_resource(resource_id):
             'error': 'Resource not found'
         }), 404
     
-    db.session.delete(resource)
+    # Soft delete: set status to deleted
+    resource.status = 'deleted'
     db.session.commit()
     
     return jsonify({

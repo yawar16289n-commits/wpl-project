@@ -92,18 +92,9 @@ export default function PublicProfile() {
           <div className="p-8 border-b border-gray-200">
             <div className="flex items-start gap-6">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-3xl font-bold flex-shrink-0">
-                {profile.profile_picture ? (
-                  <Image 
-                    src={profile.profile_picture} 
-                    alt={profile.name}
-                    width={96}
-                    height={96}
-                    className="w-24 h-24 rounded-full object-cover"
-                  />
-                ) : (
-                  profile.name.charAt(0).toUpperCase()
-                )}
+                {profile.name?.charAt(0).toUpperCase() || 'U'}
               </div>
+ 
 
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{profile.name}</h1>

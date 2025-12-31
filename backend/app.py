@@ -13,10 +13,11 @@ def create_app():
 
     # Configure CORS with credentials support
     CORS(app, 
-         origins=app.config['CORS_ORIGINS'], 
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization", "X-User-Id"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+         origins=["http://localhost:3000"],
+         allow_headers=["Content-Type", "X-User-Id"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         supports_credentials=True)
+
 
     db.init_app(app)
     migrate = Migrate(app, db)

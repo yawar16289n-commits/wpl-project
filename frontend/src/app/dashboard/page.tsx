@@ -58,16 +58,35 @@ interface DashboardData {
   };
 }
 
+// Helper function to validate and sanitize image URLs
+const getValidImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '/placeholder.svg';
+  
+  try {
+    const urlObj = new URL(url);
+    const allowedHosts = ['images.unsplash.com', 'unsplash.com', 'picsum.photos'];
+    
+    if (allowedHosts.includes(urlObj.hostname)) {
+      return url;
+    }
+  } catch (e) {
+    // Invalid URL, return placeholder
+  }
+  
+  return '/placeholder.svg';
+};
+
 export default function Dashboard() {
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('inprogress');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [recommendedCourses, setRecommendedCourses] = useState<CourseData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUnenrollModal, setShowUnenrollModal] = useState(false);
   const [selectedEnrollment, setSelectedEnrollment] = useState<EnrollmentData | null>(null);
   const [unenrolling, setUnenrolling] = useState(false);
+  const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState(false);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -91,17 +110,80 @@ export default function Dashboard() {
         }
 
         if (response.success && response.data) {
-          const data = (response.data as { dashboard: DashboardData }).dashboard;
-          setDashboardData(data);
-
-          // Fetch recommended courses for students
-          if (userRole === 'learner') {
-            const coursesResponse = await courseApi.getCourses();
-            if (coursesResponse.success && coursesResponse.data) {
-              const coursesData = (coursesResponse.data as { courses: CourseData[] }).courses;
-              setRecommendedCourses(coursesData.slice(0, 4));
-            }
+          // Dashboard API returns data directly, not nested in 'dashboard'
+          const data = response.data as any;
+          
+          // Transform the student dashboard response
+          if (userRole !== 'instructor' && data.courses) {
+            // Map API response to component format
+            const mappedCourses = data.courses.map((item: any) => ({
+              id: item.enrollment_id,
+              user_id: userId,
+              course_id: item.course.id,
+              enrolled_at: item.enrolled_at,
+              progress: item.progress_percentage, // API returns progress_percentage
+              status: item.status,
+              course: item.course
+            }));
+            
+            const transformedData: DashboardData = {
+              user: user,
+              enrolled_courses: {
+                in_progress: mappedCourses.filter((c: any) => c.status === 'active'),
+                completed: mappedCourses.filter((c: any) => c.status === 'completed')
+              },
+              stats: {
+                total_enrolled: data.total || 0,
+                in_progress: mappedCourses.filter((c: any) => c.status === 'active').length,
+                completed: mappedCourses.filter((c: any) => c.status === 'completed').length
+              }
+            };
+            setDashboardData(transformedData);
+          } else if (userRole === 'instructor' && data.courses) {
+            // Transform instructor dashboard
+            const transformedData: DashboardData = {
+              user: user,
+              created_courses: {
+                published: data.courses
+                  .filter((item: any) => item.course?.status === 'active')
+                  .map((item: any) => ({
+                    id: item.course.id,
+                    title: item.course.title,
+                    description: item.course.description,
+                    level: item.course.level,
+                    duration: item.course.duration,
+                    image: item.course.image,
+                    status: item.course.status,
+                    students: item.total_students,
+                    rating: item.rating
+                  })),
+                drafts: data.courses
+                  .filter((item: any) => item.course?.status === 'unpublished')
+                  .map((item: any) => ({
+                    id: item.course.id,
+                    title: item.course.title,
+                    description: item.course.description,
+                    level: item.course.level,
+                    duration: item.course.duration,
+                    image: item.course.image,
+                    status: item.course.status,
+                    students: item.total_students,
+                    rating: item.rating
+                  }))
+              },
+              stats: {
+                total_courses: data.total || 0,
+                published: data.courses.filter((item: any) => item.course?.status === 'active').length,
+                drafts: data.courses.filter((item: any) => item.course?.status === 'unpublished').length,
+                total_students: data.courses.reduce((sum: number, item: any) => sum + (item.total_students || 0), 0),
+                total_reviews: data.courses.reduce((sum: number, item: any) => sum + (item.total_reviews || 0), 0)
+              }
+            };
+            setDashboardData(transformedData);
+          } else {
+            setDashboardData(data);
           }
+
         } else {
           setError(response.error || 'Failed to load dashboard');
         }
@@ -119,6 +201,31 @@ export default function Dashboard() {
   const handleUnenrollClick = (enrollment: EnrollmentData) => {
     setSelectedEnrollment(enrollment);
     setShowUnenrollModal(true);
+  };
+
+  const handleContinueLearning = async (enrollment: EnrollmentData) => {
+    try {
+      const { progressApi } = await import('@/lib/api');
+      const response = await progressApi.getNextLecture(enrollment.id);
+      
+      if (response.success && response.data) {
+        const data = response.data as { next_lecture?: { lecture_id: number; course_id: number } };
+        if (data.next_lecture) {
+          // Navigate to the next incomplete lecture
+          window.location.href = `/learn/${data.next_lecture.course_id}?lecture=${data.next_lecture.lecture_id}`;
+        } else {
+          // Course completed, just go to course page
+          window.location.href = `/learn/${enrollment.course.id}`;
+        }
+      } else {
+        // Fallback to course page if API fails
+        window.location.href = `/learn/${enrollment.course.id}`;
+      }
+    } catch (err) {
+      console.error('Error fetching next lecture:', err);
+      // Fallback to course page
+      window.location.href = `/learn/${enrollment.course.id}`;
+    }
   };
 
   const handleUnenrollConfirm = async () => {
@@ -151,6 +258,51 @@ export default function Dashboard() {
     } finally {
       setUnenrolling(false);
     }
+  };
+
+  const handleTogglePublish = async (course: CourseData) => {
+    const newStatus = course.status === 'active' ? 'unpublished' : 'active';
+    
+    try {
+      const response = await fetch(`http://localhost:5001/api/courses/${course.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': dashboardData?.user?.id?.toString() || '',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (response.ok) {
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error toggling publish status:', error);
+    }
+  };
+
+  const handleDeleteCourse = async () => {
+    if (!selectedCourse) return;
+
+    setDeletingCourse(true);
+    try {
+      const response = await fetch(`http://localhost:5001/api/courses/${selectedCourse.id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-User-Id': dashboardData?.user?.id?.toString() || '',
+        },
+      });
+
+      if (response.ok) {
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error deleting course:', error);
+    }
+
+    setDeletingCourse(false);
+    setShowDeleteCourseModal(false);
+    setSelectedCourse(null);
   };
 
   if (loading) {
@@ -274,7 +426,7 @@ export default function Dashboard() {
                           <div className="cursor-pointer group">
                             <div className="relative">
                               <Image
-                                src={enrollment.course.image || '/placeholder.svg'}
+                                src={getValidImageUrl(enrollment.course.image)}
                                 alt={enrollment.course.title}
                                 width={400}
                                 height={160}
@@ -301,11 +453,15 @@ export default function Dashboard() {
                           </div>
                         </Link>
                         <div className="px-5 pb-5 space-y-2">
-                          <Link href={`/learn/${enrollment.course.id}`}>
-                            <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
-                              Continue Learning
-                            </button>
-                          </Link>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleContinueLearning(enrollment);
+                            }}
+                            className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition"
+                          >
+                            Continue Learning
+                          </button>
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -335,7 +491,7 @@ export default function Dashboard() {
                         <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
                           <div className="relative">
                             <Image
-                              src={enrollment.course.image || '/placeholder.svg'}
+                              src={getValidImageUrl(enrollment.course.image)}
                               alt={enrollment.course.title}
                               width={400}
                               height={160}
@@ -395,9 +551,7 @@ export default function Dashboard() {
                 <h3 className="text-2xl font-bold text-gray-900">
                   {activeTab === 'published' ? 'Published Courses' : 'Draft Courses'}
                 </h3>
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
-                  Create New Course
-                </button>
+
               </div>
 
               {activeTab === 'published' && (
@@ -409,7 +563,7 @@ export default function Dashboard() {
                           <div className="cursor-pointer group">
                             <div className="relative">
                               <Image
-                                src={course.image || '/placeholder.svg'}
+                                src={getValidImageUrl(course.image)}
                                 alt={course.title}
                                 width={400}
                                 height={160}
@@ -433,12 +587,27 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </Link>
-                        <div className="px-5 pb-5">
+                        <div className="px-5 pb-5 space-y-2">
                           <Link href={`/instructor/courses/${course.id}/edit`}>
                             <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
                               Edit Course
                             </button>
                           </Link>
+                          <button
+                            onClick={() => handleTogglePublish(course)}
+                            className="w-full bg-yellow-600 text-white py-2 rounded-md font-medium hover:bg-yellow-700 transition"
+                          >
+                            Unpublish
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedCourse(course);
+                              setShowDeleteCourseModal(true);
+                            }}
+                            className="w-full border-2 border-red-300 text-red-600 py-2 rounded-md font-medium hover:bg-red-50 transition"
+                          >
+                            Delete Course
+                          </button>
                         </div>
                       </div>
                     ))
@@ -460,7 +629,7 @@ export default function Dashboard() {
                       <div key={course.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
                         <div className="relative">
                           <Image
-                            src={course.image || '/placeholder.svg'}
+                            src={getValidImageUrl(course.image)}
                             alt={course.title}
                             width={400}
                             height={160}
@@ -474,9 +643,28 @@ export default function Dashboard() {
                           <h4 className="text-lg font-bold text-gray-900 mb-1">{course.title}</h4>
                           <p className="text-sm text-gray-600 mb-4">{course.level} • {course.duration}</p>
 
-                          <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
-                            Continue Editing
-                          </button>
+                          <div className="space-y-2">
+                            <Link href={`/instructor/courses/${course.id}/edit`}>
+                              <button className="w-full bg-blue-600 text-white py-2 rounded-md font-medium hover:bg-blue-700 transition">
+                                Continue Editing
+                              </button>
+                            </Link>
+                            <button
+                              onClick={() => handleTogglePublish(course)}
+                              className="w-full bg-green-600 text-white py-2 rounded-md font-medium hover:bg-green-700 transition"
+                            >
+                              Publish Course
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedCourse(course);
+                                setShowDeleteCourseModal(true);
+                              }}
+                              className="w-full border-2 border-red-300 text-red-600 py-2 rounded-md font-medium hover:bg-red-50 transition"
+                            >
+                              Delete Course
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -489,36 +677,6 @@ export default function Dashboard() {
               )}
             </div>
           </>
-        )}
-
-        {!isInstructor && recommendedCourses.length > 0 && (
-          <div className="mb-16">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Recommended For You</h3>
-            <div className="grid md:grid-cols-4 gap-6">
-              {recommendedCourses.map((course) => (
-                <Link key={course.id} href={`/course/${course.id}`}>
-                  <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
-                    <Image
-                      src={course.image || '/placeholder.svg'}
-                      alt={course.title}
-                      width={300}
-                      height={128}
-                      className="w-full h-32 object-cover"
-                    />
-                    <div className="p-4">
-                      <h4 className="font-bold text-gray-900 mb-2 group-hover:text-blue-600">{course.title}</h4>
-                      <p className="text-xs text-gray-600 mb-2">{course.instructor || course.company}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                          {course.level}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
         )}
 
         {isInstructor && (
@@ -555,6 +713,38 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Delete Course Confirmation Modal */}
+      {showDeleteCourseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Delete Course</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete &quot;{selectedCourse?.title}&quot;? This action cannot be undone.
+              All course content, lectures, and student progress will be permanently deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteCourseModal(false);
+                  setSelectedCourse(null);
+                }}
+                disabled={deletingCourse}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteCourse}
+                disabled={deletingCourse}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingCourse ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

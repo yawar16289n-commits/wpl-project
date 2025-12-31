@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '@/app/components/Header';
 import ReviewsRatings from '@/app/components/ReviewsRatings';
 import { courseApi, enrollmentApi, lectureResourceApi } from '@/lib/api';
+import { getCurrentUser, canEnroll } from '@/lib/auth';
 
 export default function CourseDetail() {
   const params = useParams();
@@ -75,6 +76,13 @@ export default function CourseDetail() {
       }
 
       const user = JSON.parse(userStr);
+      
+      // Check if user can enroll (instructors cannot)
+      if (!canEnroll()) {
+        setEnrollmentMessage('Instructors cannot enroll in courses. Only students and admins can enroll.');
+        return;
+      }
+
       const response = await enrollmentApi.enroll(user.id, Number(courseId));
 
       if (response.success) {
@@ -171,10 +179,10 @@ export default function CourseDetail() {
                   ))}
                 </div>
                 <span className="font-semibold">{course.rating}</span>
-                <span className="text-gray-300">({course.reviews?.toLocaleString() || 0} reviews)</span>
+                <span className="text-gray-300">({(course.total_reviews || course.reviews || 0).toLocaleString()} reviews)</span>
               </div>
               <div className="text-gray-300">
-                {course.students?.toLocaleString() || 0} students
+                {(course.total_students || course.students || 0).toLocaleString()} students
               </div>
             </div>
 
@@ -213,7 +221,7 @@ export default function CourseDetail() {
                     Continue Learning
                   </button>
                 </Link>
-              ) : (
+              ) : canEnroll() ? (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
@@ -221,6 +229,10 @@ export default function CourseDetail() {
                 >
                   {enrolling ? 'Enrolling...' : 'Enroll Now'}
                 </button>
+              ) : (
+                <div className="w-full bg-gray-100 border-2 border-gray-300 text-gray-600 py-3 rounded-lg font-bold text-center">
+                  <p className="text-sm">Instructors cannot enroll in courses</p>
+                </div>
               )}
 
               <div className="space-y-2 text-sm text-gray-600 pt-4 border-t border-gray-200">

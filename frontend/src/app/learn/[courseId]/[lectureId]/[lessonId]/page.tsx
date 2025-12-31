@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { lectureResourceApi, lectureApi, progressApi } from '@/lib/api';
+import { lectureResourceApi, lectureApi, progressApi, enrollmentApi } from '@/lib/api';
 
 export default function LessonPage() {
     const params = useParams();
@@ -12,6 +12,7 @@ export default function LessonPage() {
 
     const [lesson, setLesson] = useState<any>(null);
     const [lecture, setLecture] = useState<any>(null);
+    const [enrollment, setEnrollment] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isCompleted, setIsCompleted] = useState(false);
     const [user, setUser] = useState<any>(null);
@@ -47,11 +48,23 @@ export default function LessonPage() {
             const userData = localStorage.getItem('user');
             if (userData) {
                 const userId = JSON.parse(userData).id;
-                const progressRes = await progressApi.getLessonProgress(userId, Number(courseId));
-                if (progressRes.success && progressRes.data) {
-                    const completedLessons = (progressRes.data as any).completed_lessons;
-                    if (completedLessons[lectureId] && completedLessons[lectureId].includes(Number(lessonId))) {
-                        setIsCompleted(true);
+                
+                // Fetch enrollment
+                const enrollmentRes = await enrollmentApi.checkEnrollment(userId, Number(courseId));
+                if (enrollmentRes.success && enrollmentRes.data) {
+                    const enrollmentData = (enrollmentRes.data as any).enrollment;
+                    setEnrollment(enrollmentData);
+                    
+                    // Check completed lectures using new API
+                    if (enrollmentData) {
+                        const completedRes = await progressApi.getCompletedLectures(enrollmentData.id);
+                        if (completedRes.success && completedRes.data) {
+                            const completedLectures = (completedRes.data as any).completed_lectures || [];
+                            const isLessonCompleted = completedLectures.some(
+                                (l: any) => l.lecture_resource_id === Number(lessonId)
+                            );
+                            setIsCompleted(isLessonCompleted);
+                        }
                     }
                 }
             }
@@ -68,11 +81,15 @@ export default function LessonPage() {
             return;
         }
 
+        if (!enrollment) {
+            setError('Enrollment not found');
+            return;
+        }
+
         try {
-            const response = await progressApi.markLessonComplete(
-                user.id,
-                Number(courseId),
-                Number(lectureId),
+            // Use new progress API with enrollment_id and lecture_resource_id
+            const response = await progressApi.markLectureComplete(
+                enrollment.id,
                 Number(lessonId)
             );
 
@@ -82,6 +99,35 @@ export default function LessonPage() {
                 setTimeout(() => setSuccessMessage(''), 3000);
             } else {
                 setError(response.error || 'Failed to mark lesson as complete');
+            }
+        } catch (err) {
+            setError('An error occurred');
+        }
+    };
+
+    const handleMarkUncomplete = async () => {
+        if (!user) {
+            setError('Please log in');
+            return;
+        }
+
+        if (!enrollment) {
+            setError('Enrollment not found');
+            return;
+        }
+
+        try {
+            const response = await progressApi.markLectureUncomplete(
+                enrollment.id,
+                Number(lessonId)
+            );
+
+            if (response.success) {
+                setIsCompleted(false);
+                setSuccessMessage('Lesson marked as incomplete');
+                setTimeout(() => setSuccessMessage(''), 3000);
+            } else {
+                setError(response.error || 'Failed to mark lesson as incomplete');
             }
         } catch (err) {
             setError('An error occurred');
@@ -172,25 +218,24 @@ export default function LessonPage() {
 
                 {/* Mark as Complete Button */}
                 <div className="flex justify-end pt-6 border-t border-gray-100">
-                    <button
-                        onClick={handleMarkComplete}
-                        disabled={isCompleted}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-lg transition-all shadow-sm ${isCompleted
-                            ? 'bg-green-100 text-green-700 border border-green-200 cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
-                            }`}
-                    >
-                        {isCompleted ? (
-                            <>
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Completed
-                            </>
-                        ) : (
-                            'Mark as Completed'
-                        )}
-                    </button>
+                    {isCompleted ? (
+                        <button
+                            onClick={handleMarkUncomplete}
+                            className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-lg transition-all shadow-sm bg-green-100 text-green-700 border border-green-200 hover:bg-gray-100 hover:text-gray-700"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Completed - Mark as Incomplete
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleMarkComplete}
+                            className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-lg transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md"
+                        >
+                            Mark as Completed
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

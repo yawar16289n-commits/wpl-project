@@ -40,7 +40,7 @@ def get_category(category_name):
 # Get Courses by Category (GET)
 @course_categories_bp.route('/<string:category_name>/courses', methods=['GET'])
 def get_courses_by_category(category_name):
-    courses = Course.query.filter_by(category=category_name, is_published=True).all()
+    courses = Course.query.filter_by(category=category_name, status='active').all()
     
     return jsonify({
         'success': True,
@@ -53,6 +53,9 @@ def get_courses_by_category(category_name):
 # Get Category Statistics (GET)
 @course_categories_bp.route('/<string:category_name>/stats', methods=['GET'])
 def get_category_stats(category_name):
+    from models import Enrollment, Rating
+    from sqlalchemy import func
+    
     courses = Course.query.filter_by(category=category_name).all()
     
     if not courses:
@@ -61,8 +64,21 @@ def get_category_stats(category_name):
             'error': 'Category not found'
         }), 404
     
-    total_students = sum(course.total_students for course in courses)
-    avg_rating = sum(float(course.rating) for course in courses) / len(courses) if courses else 0
+    course_ids = [course.id for course in courses]
+    
+    # Calculate total students from active enrollments
+    total_students = Enrollment.query.filter(
+        Enrollment.course_id.in_(course_ids),
+        Enrollment.status.in_(['active', 'completed'])
+    ).distinct(Enrollment.user_id).count()
+    
+    # Calculate average rating from ratings
+    avg_rating_result = db.session.query(func.avg(Rating.rating)).filter(
+        Rating.course_id.in_(course_ids),
+        Rating.status == 'active'
+    ).scalar()
+    
+    avg_rating = float(avg_rating_result) if avg_rating_result else 0.0
     
     return jsonify({
         'success': True,
@@ -70,6 +86,6 @@ def get_category_stats(category_name):
         'stats': {
             'total_courses': len(courses),
             'total_students': total_students,
-            'average_rating': round(avg_rating, 2)
+            'average_rating': round(avg_rating, 1)
         }
     }), 200

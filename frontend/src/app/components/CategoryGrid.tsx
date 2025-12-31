@@ -11,7 +11,6 @@ interface Course {
   image: string;
   instructor?: string;
   company?: string;
-  price: number;
   rating: number;
   students: number;
   level: string;
@@ -72,7 +71,6 @@ export default function CategoryGrid() {
                 title={course.title} 
                 image={course.image || '/placeholder.svg'}
                 instructor={course.instructor || course.company}
-                price={course.price}
                 rating={course.rating}
                 students={course.students}
                 level={course.level}

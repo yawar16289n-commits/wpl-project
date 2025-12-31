@@ -1,6 +1,24 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
+// Helper function to validate and sanitize image URLs
+const getValidImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '/placeholder.svg';
+  
+  try {
+    const urlObj = new URL(url);
+    const allowedHosts = ['images.unsplash.com', 'unsplash.com', 'picsum.photos'];
+    
+    if (allowedHosts.includes(urlObj.hostname)) {
+      return url;
+    }
+  } catch (e) {
+    // Invalid URL, return placeholder
+  }
+  
+  return '/placeholder.svg';
+};
+
 export default function CourseCard({
   title,
   image,
@@ -23,7 +41,7 @@ export default function CourseCard({
       <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group">
         <div className="relative overflow-hidden bg-gray-200 h-48">
           <Image 
-            src={image} 
+            src={getValidImageUrl(image)} 
             alt={title}
             width={400}
             height={192}

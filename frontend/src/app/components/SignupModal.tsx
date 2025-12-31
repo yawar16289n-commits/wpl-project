@@ -45,7 +45,13 @@ export default function SignupModal({ onClose, onLogin }: SignupModalProps) {
       if (userData.success) {
         localStorage.setItem('user', JSON.stringify(userData.user));
         onClose();
-        router.push('/dashboard');
+        
+        // Redirect based on role
+        if (userData.user.role === 'admin') {
+          router.push('/admin/dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       } else {
         setError('Signup failed');
       }

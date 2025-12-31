@@ -1,29 +1,10 @@
 from datetime import datetime
-from app import db
-from sqlalchemy import Numeric
+from database import db
+from sqlalchemy import Numeric, func
 import json
 
 
-class SoftDeleteMixin:
-    """Mixin to add soft delete functionality to models"""
-    deleted_at = db.Column(db.DateTime, nullable=True, default=None)
-    
-    def soft_delete(self):
-        """Soft delete the record"""
-        self.deleted_at = datetime.utcnow()
-        db.session.commit()
-    
-    def restore(self):
-        """Restore a soft deleted record"""
-        self.deleted_at = None
-        db.session.commit()
-    
-    @property
-    def is_deleted(self):
-        """Check if record is soft deleted"""
-        return self.deleted_at is not None
-
-class User(SoftDeleteMixin, db.Model):
+class User(db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -31,23 +12,33 @@ class User(SoftDeleteMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.Enum('learner', 'instructor', 'admin'), nullable=False)
-    profile_picture = db.Column(db.String(255), nullable=True)
-    bio = db.Column(db.Text, nullable=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime)
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_profile=False):
+        data = {
             'id': self.id,
             'name': self.name,
             'email': self.email,
             'role': self.role,
-            'profile_picture': self.profile_picture,
-            'bio': self.bio,
+            'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+        
+        if include_profile:
+            profile = Profile.query.filter_by(user_id=self.id, status='active').first()
+            if profile:
+                data['profile_picture'] = profile.profile_picture
+                data['bio'] = profile.bio
+                data['website'] = profile.website
+                data['social_links'] = json.loads(profile.social_links) if profile.social_links else []
+                data['expertise'] = json.loads(profile.expertise) if profile.expertise else []
+                data['education'] = json.loads(profile.education) if profile.education else []
+        
+        return data
 
 
-class Course(SoftDeleteMixin, db.Model):
+class Course(db.Model):
     __tablename__ = 'courses'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -60,17 +51,35 @@ class Course(SoftDeleteMixin, db.Model):
     level = db.Column(db.Enum('Beginner', 'Intermediate', 'Advanced'), default='Beginner')
     duration = db.Column(db.String(50), nullable=True)
     image = db.Column(db.String(255), nullable=True)
-    rating = db.Column(Numeric(3, 2), default=0.00)
-    total_students = db.Column(db.Integer, default=0)
-    total_reviews = db.Column(db.Integer, default=0)
-    is_published = db.Column(db.Boolean, default=False)
-    language = db.Column(db.String(50), default='English')
-    subtitles = db.Column(db.Text, nullable=True)
-    skills = db.Column(db.Text, nullable=True)
-    learning_outcomes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.Enum('active', 'unpublished', 'deleted'), default='unpublished', nullable=False)
     created_at = db.Column(db.DateTime)
     
-    def to_dict(self, include_instructor=False, include_modules=False):
+    @property
+    def rating(self):
+        """Dynamically calculate average rating from Rating table"""
+        avg = db.session.query(func.avg(Rating.rating)).filter(
+            Rating.course_id == self.id,
+            Rating.status == 'active'
+        ).scalar()
+        return round(float(avg), 1) if avg else 0.0
+    
+    @property
+    def total_students(self):
+        """Dynamically calculate total students from Enrollment table"""
+        return Enrollment.query.filter(
+            Enrollment.course_id == self.id,
+            Enrollment.status.in_(['active', 'completed'])
+        ).count()
+    
+    @property
+    def total_reviews(self):
+        """Dynamically calculate total reviews from Review table"""
+        return Review.query.filter(
+            Review.course_id == self.id,
+            Review.status == 'active'
+        ).count()
+    
+    def to_dict(self, include_instructor=False, include_modules=False, include_details=False, include_stats=False):
         data = {
             'id': self.id,
             'title': self.title,
@@ -82,34 +91,45 @@ class Course(SoftDeleteMixin, db.Model):
             'level': self.level,
             'duration': self.duration,
             'image': self.image,
-            'rating': float(self.rating) if self.rating else 0.0,
-            'total_students': self.total_students,
-            'students': self.total_students,
-            'total_reviews': self.total_reviews,
-            'reviews': self.total_reviews,
-            'language': self.language,
-            'subtitles': json.loads(self.subtitles) if self.subtitles else [],
-            'skills': json.loads(self.skills) if self.skills else [],
-            'learning_outcomes': json.loads(self.learning_outcomes) if self.learning_outcomes else [],
-            'learningOutcomes': json.loads(self.learning_outcomes) if self.learning_outcomes else [],
+            'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+        
+        # Include stats by default for backwards compatibility
+        if include_stats or True:
+            data['rating'] = self.rating
+            data['total_students'] = self.total_students
+            data['total_reviews'] = self.total_reviews
+        
         
         if include_instructor:
             instructor = User.query.get(self.instructor_id)
             if instructor:
                 data['instructor'] = instructor.name
-                data['instructor_bio'] = instructor.bio
-                data['instructor_image'] = instructor.profile_picture
+                # Fetch instructor profile data
+                profile = Profile.query.filter_by(user_id=instructor.id, status='active').first()
+                if profile:
+                    data['instructor_bio'] = profile.bio
+                    data['instructor_image'] = profile.profile_picture
+                else:
+                    data['instructor_bio'] = None
+                    data['instructor_image'] = None
         
         if include_modules:
             modules = CourseModule.query.filter_by(course_id=self.id).order_by(CourseModule.number).all()
             data['courses'] = [module.to_dict() for module in modules]
         
+        if include_details:
+            course_detail = CourseDetail.query.filter_by(course_id=self.id, status='active').first()
+            if course_detail:
+                data['requirements'] = json.loads(course_detail.requirements) if course_detail.requirements else []
+                data['who_is_for'] = json.loads(course_detail.who_is_for) if course_detail.who_is_for else []
+                data['objectives'] = json.loads(course_detail.objectives) if course_detail.objectives else []
+        
         return data
 
 
-class CourseModule(SoftDeleteMixin, db.Model):
+class CourseModule(db.Model):
     __tablename__ = 'course_modules'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -118,6 +138,7 @@ class CourseModule(SoftDeleteMixin, db.Model):
     title = db.Column(db.String(200), nullable=False)
     lessons = db.Column(db.Integer, default=0)
     duration = db.Column(db.String(50), nullable=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     
     @property
     def resource_count(self):
@@ -135,29 +156,36 @@ class CourseModule(SoftDeleteMixin, db.Model):
             'number': self.number,
             'title': self.title,
             'lessons': actual_lessons,  # Return calculated count
-            'duration': self.duration
+            'duration': self.duration,
+            'status': self.status
         }
 
 
-class Enrollment(SoftDeleteMixin, db.Model):
+class Enrollment(db.Model):
     __tablename__ = 'enrollments'
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
-    progress = db.Column(db.Integer, default=0)
-    status = db.Column(db.Enum('active', 'completed', 'dropped'), default='active')
+    status = db.Column(db.Enum('active', 'completed', 'dropped', 'deleted'), default='active')
     enrolled_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
     
     __table_args__ = (db.UniqueConstraint('user_id', 'course_id', name='unique_user_course'),)
     
-    def to_dict(self, include_course=False):
+    @property
+    def progress(self):
+        """Dynamically calculate progress from Progress table"""
+        # Import here to avoid circular import
+        from models import Progress
+        return Progress.calculate_course_progress(self.id)
+    
+    def to_dict(self, include_course=False, include_next_lecture=False):
         data = {
             'id': self.id,
             'user_id': self.user_id,
             'course_id': self.course_id,
-            'progress': self.progress,
+            'progress': self.progress,  # Dynamically calculated
             'status': self.status,
             'enrolled_at': self.enrolled_at.isoformat() if self.enrolled_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None
@@ -168,16 +196,25 @@ class Enrollment(SoftDeleteMixin, db.Model):
             if course:
                 data['course'] = course.to_dict(include_instructor=True)
         
+        if include_next_lecture:
+            from models import Progress
+            next_lecture = Progress.get_next_lecture(self.id)
+            if next_lecture:
+                data['next_lecture'] = next_lecture.to_dict()
+            else:
+                data['next_lecture'] = None
+        
         return data
 
 
-class Review(SoftDeleteMixin, db.Model):
+class Review(db.Model):
     __tablename__ = 'reviews'
     
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     comment = db.Column(db.Text, nullable=False)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -195,20 +232,22 @@ class Review(SoftDeleteMixin, db.Model):
             user = User.query.get(self.user_id)
             if user:
                 data['user_name'] = user.name
-                data['user_image'] = user.profile_picture
+                # Fetch user profile picture
+                profile = Profile.query.filter_by(user_id=user.id, status='active').first()
+                data['user_image'] = profile.profile_picture if profile else None
         
         return data
 
 
-class Rating(SoftDeleteMixin, db.Model):
+class Rating(db.Model):
     __tablename__ = 'ratings'
     
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     __table_args__ = (db.UniqueConstraint('user_id', 'course_id', name='unique_user_course_rating'),)
     
@@ -218,22 +257,22 @@ class Rating(SoftDeleteMixin, db.Model):
             'course_id': self.course_id,
             'user_id': self.user_id,
             'rating': self.rating,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
-class LectureResource(SoftDeleteMixin, db.Model):
+class LectureResource(db.Model):
     __tablename__ = 'lecture_resources'
     
     id = db.Column(db.Integer, primary_key=True)
     lecture_id = db.Column(db.Integer, db.ForeignKey('course_modules.id'), nullable=False)
-    resource_type = db.Column(db.Enum('video', 'pdf', 'link', 'document', 'quiz'), nullable=False)
+    resource_type = db.Column(db.Enum('video', 'pdf', 'link', 'document', 'quiz', 'text'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500), nullable=True)
     content = db.Column(db.Text, nullable=True)
     duration = db.Column(db.String(50), nullable=True)
     order = db.Column(db.Integer, default=0)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -250,7 +289,7 @@ class LectureResource(SoftDeleteMixin, db.Model):
         }
 
 
-class Profile(SoftDeleteMixin, db.Model):
+class Profile(db.Model):
     __tablename__ = 'profiles'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -261,6 +300,7 @@ class Profile(SoftDeleteMixin, db.Model):
     social_links = db.Column(db.Text, nullable=True)
     expertise = db.Column(db.Text, nullable=True)
     education = db.Column(db.Text, nullable=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def to_dict(self):
@@ -277,7 +317,7 @@ class Profile(SoftDeleteMixin, db.Model):
         }
 
 
-class CourseDetail(SoftDeleteMixin, db.Model):
+class CourseDetail(db.Model):
     __tablename__ = 'course_details'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -285,10 +325,8 @@ class CourseDetail(SoftDeleteMixin, db.Model):
     requirements = db.Column(db.Text, nullable=True)
     who_is_for = db.Column(db.Text, nullable=True)
     objectives = db.Column(db.Text, nullable=True)
-    syllabus = db.Column(db.Text, nullable=True)
-    faq = db.Column(db.Text, nullable=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def to_dict(self):
         return {
@@ -297,23 +335,17 @@ class CourseDetail(SoftDeleteMixin, db.Model):
             'requirements': json.loads(self.requirements) if self.requirements else [],
             'who_is_for': json.loads(self.who_is_for) if self.who_is_for else [],
             'objectives': json.loads(self.objectives) if self.objectives else [],
-            'syllabus': self.syllabus,
-            'faq': json.loads(self.faq) if self.faq else [],
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
-class CourseCategory(SoftDeleteMixin, db.Model):
+class CourseCategory(db.Model):
     __tablename__ = 'course_categories'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     slug = db.Column(db.String(100), nullable=False, unique=True)
-    description = db.Column(db.Text, nullable=True)
-    icon = db.Column(db.String(255), nullable=True)
-    parent_id = db.Column(db.Integer, db.ForeignKey('course_categories.id'), nullable=True)
-    is_active = db.Column(db.Boolean, default=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -321,38 +353,76 @@ class CourseCategory(SoftDeleteMixin, db.Model):
             'id': self.id,
             'name': self.name,
             'slug': self.slug,
-            'description': self.description,
-            'icon': self.icon,
-            'parent_id': self.parent_id,
-            'is_active': self.is_active,
+            'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
-class Progress(SoftDeleteMixin, db.Model):
+class Progress(db.Model):
     __tablename__ = 'progress'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
-    lecture_id = db.Column(db.Integer, db.ForeignKey('course_modules.id'), nullable=True)
-    completed_lectures = db.Column(db.Text, nullable=True)
-    current_lecture = db.Column(db.Integer, nullable=True)
-    time_spent = db.Column(db.Integer, default=0)
-    last_accessed = db.Column(db.DateTime, default=datetime.utcnow)
-    notes = db.Column(db.Text, nullable=True)
+    enrollment_id = db.Column(db.Integer, db.ForeignKey('enrollments.id'), nullable=False)
+    lecture_resource_id = db.Column(db.Integer, db.ForeignKey('lecture_resources.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
     
-    __table_args__ = (db.UniqueConstraint('user_id', 'course_id', 'lecture_id', name='unique_user_course_lecture_progress'),)
-    
+    __table_args__ = (db.UniqueConstraint('enrollment_id', 'lecture_resource_id', name='unique_enrollment_lecture'),)
+
     def to_dict(self):
         return {
             'id': self.id,
-            'user_id': self.user_id,
-            'course_id': self.course_id,
-            'lecture_id': self.lecture_id,
-            'completed_lectures': json.loads(self.completed_lectures) if self.completed_lectures else [],
-            'current_lecture': self.current_lecture,
-            'time_spent': self.time_spent,
-            'last_accessed': self.last_accessed.isoformat() if self.last_accessed else None,
-            'notes': self.notes
+            'enrollment_id': self.enrollment_id,
+            'lecture_resource_id': self.lecture_resource_id,
+            'completed': self.completed,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'status': self.status
         }
+
+    @staticmethod
+    def calculate_course_progress(enrollment_id):
+        """Calculate progress percentage for a course enrollment ignoring deleted lectures and progress"""
+        enrollment = Enrollment.query.get(enrollment_id)
+        if not enrollment or enrollment.status == 'deleted':
+            return 0
+
+        # Get all active lecture resources for the course
+        total_lectures = db.session.query(LectureResource).join(
+            CourseModule, LectureResource.lecture_id == CourseModule.id
+        ).filter(
+            CourseModule.course_id == enrollment.course_id,
+            LectureResource.status == 'active',
+            CourseModule.status == 'active'
+        ).count()
+
+        if total_lectures == 0:
+            return 0
+
+        # Get completed and active progress records
+        completed_lectures = Progress.query.filter_by(
+            enrollment_id=enrollment_id,
+            completed=True,
+            status='active'
+        ).count()
+
+        return int((completed_lectures / total_lectures) * 100)
+    
+    @staticmethod
+    def get_next_lecture(enrollment_id):
+        """Get the next incomplete lecture resource for an enrollment"""
+        enrollment = Enrollment.query.get(enrollment_id)
+        if not enrollment:
+            return None
+        
+        # Find first incomplete lecture
+        incomplete_progress = Progress.query.filter_by(
+            enrollment_id=enrollment_id,
+            completed=False,
+            status='active'
+        ).first()
+        
+        if incomplete_progress:
+            return LectureResource.query.get(incomplete_progress.lecture_resource_id)
+        
+        return None

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { reviewApi, ratingApi } from '@/lib/api';
+import { canReview } from '@/lib/auth';
 
 interface Review {
   id: number;
@@ -60,23 +61,32 @@ export default function ReviewsRatings({ courseId, userId, isEnrolled }: Reviews
 
   const handleRatingClick = async (rating: number) => {
     if (!userId || !isEnrolled) return;
+    
+    // Check if user can submit ratings (instructors cannot)
+    if (!canReview()) {
+      alert('Instructors cannot submit ratings. Only students and admins can rate courses.');
+      return;
+    }
 
     setUserRating(rating);
     
-    if (userRatingId) {
-      await ratingApi.updateRating(userRatingId, rating);
-    } else {
-      const response = await ratingApi.createRating(courseId, userId, rating);
-      if (response.success && response.data) {
-        const data = response.data as { rating: Rating };
-        setUserRatingId(data.rating.id);
-      }
+    // createRating handles both create and update
+    const response = await ratingApi.createRating(courseId, userId, rating);
+    if (response.success && response.data) {
+      const data = response.data as { rating: Rating };
+      setUserRatingId(data.rating.id);
     }
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId || !newReview.trim() || !isEnrolled) return;
+    
+    // Check if user can submit reviews (instructors cannot)
+    if (!canReview()) {
+      alert('Instructors cannot submit reviews. Only students and admins can review courses.');
+      return;
+    }
 
     setSubmitting(true);
     const response = await reviewApi.createReview(courseId, userId, newReview);
@@ -91,7 +101,7 @@ export default function ReviewsRatings({ courseId, userId, isEnrolled }: Reviews
 
   return (
     <div className="space-y-8">
-      {userId && isEnrolled && (
+      {userId && isEnrolled && canReview() && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-xl font-bold mb-4">Rate This Course</h3>
           <div className="flex gap-2 mb-6">

@@ -9,7 +9,16 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'unsplash.com',
+      },
+      {
+        protocol: 'https',
         hostname: 'picsum.photos',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
       },
     ],
   },

@@ -22,8 +22,15 @@ export default function AccountProfile() {
     bio: '',
     profile_picture: '',
   });
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -92,6 +99,58 @@ export default function AccountProfile() {
       }
     } else {
       setMessage(response.error || 'Failed to update profile');
+    }
+
+    setSaving(false);
+  };
+
+  const handlePasswordUpdate = async () => {
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setPasswordMessage('New passwords do not match');
+      return;
+    }
+
+    if (passwordData.new_password.length < 6) {
+      setPasswordMessage('Password must be at least 6 characters');
+      return;
+    }
+
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    const user = JSON.parse(userStr);
+
+    setSaving(true);
+    setPasswordMessage('');
+
+    const response = await userApi.updateProfile(user.id, {
+      password: passwordData.new_password,
+      current_password: passwordData.current_password,
+    });
+
+    if (response.success) {
+      setPasswordMessage('Password updated successfully!');
+      setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+    } else {
+      setPasswordMessage(response.error || 'Failed to update password');
+    }
+
+    setSaving(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    const user = JSON.parse(userStr);
+
+    setSaving(true);
+    const response = await userApi.deleteUser(user.id);
+
+    if (response.success) {
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    } else {
+      setMessage(response.error || 'Failed to delete account');
+      setShowDeleteConfirm(false);
     }
 
     setSaving(false);
@@ -188,20 +247,6 @@ export default function AccountProfile() {
                     <p className="text-sm text-gray-600 mb-4">
                       {profile?.role === 'instructor' ? 'Instructor' : 'Student'} • {profile?.email}
                     </p>
-                    {editing && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Profile Picture URL (optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.profile_picture}
-                          onChange={(e) => setFormData({ ...formData, profile_picture: e.target.value })}
-                          placeholder="https://example.com/image.jpg"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -260,6 +305,94 @@ export default function AccountProfile() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
                   />
                 </div>
+              </div>
+
+              {/* Password Update Section */}
+              <div className="mt-12 pt-8 border-t border-gray-200">
+                <h3 className="text-xl font-bold text-gray-900 mb-6">Change Password</h3>
+                {passwordMessage && (
+                  <div className={`mb-4 p-4 rounded-md ${
+                    passwordMessage.includes('success') 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {passwordMessage}
+                  </div>
+                )}
+                <div className="space-y-4 max-w-md">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.current_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.new_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.confirm_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handlePasswordUpdate}
+                    disabled={saving || !passwordData.current_password || !passwordData.new_password || !passwordData.confirm_password}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {saving ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Delete Account Section */}
+              <div className="mt-12 pt-8 border-t border-gray-200">
+                <h3 className="text-xl font-bold text-red-600 mb-2">Danger Zone</h3>
+                <p className="text-gray-600 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
+                
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-6 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700"
+                  >
+                    Delete Account
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+                    <h4 className="font-bold text-red-900 mb-2">Are you absolutely sure?</h4>
+                    <p className="text-sm text-red-800 mb-4">
+                      This action cannot be undone. This will permanently delete your account and remove all your data from our servers.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50"
+                        disabled={saving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={saving}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {saving ? 'Deleting...' : 'Yes, Delete My Account'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
