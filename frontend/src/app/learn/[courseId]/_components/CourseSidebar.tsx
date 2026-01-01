@@ -20,7 +20,6 @@ export default function CourseSidebar({ courseId, modules }: CourseSidebarProps)
     const [moduleLessons, setModuleLessons] = useState<Record<number, any[]>>({});
     const [loading, setLoading] = useState<Record<number, boolean>>({});
 
-    // Auto-expand the current module
     useEffect(() => {
         if (currentLectureId) {
             setExpandedModules(prev => {

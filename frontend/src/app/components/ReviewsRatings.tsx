@@ -62,7 +62,6 @@ export default function ReviewsRatings({ courseId, userId, isEnrolled }: Reviews
   const handleRatingClick = async (rating: number) => {
     if (!userId || !isEnrolled) return;
     
-    // Check if user can submit ratings (instructors cannot)
     if (!canReview()) {
       alert('Instructors cannot submit ratings. Only students and admins can rate courses.');
       return;
@@ -82,7 +81,6 @@ export default function ReviewsRatings({ courseId, userId, isEnrolled }: Reviews
     e.preventDefault();
     if (!userId || !newReview.trim() || !isEnrolled) return;
     
-    // Check if user can submit reviews (instructors cannot)
     if (!canReview()) {
       alert('Instructors cannot submit reviews. Only students and admins can review courses.');
       return;

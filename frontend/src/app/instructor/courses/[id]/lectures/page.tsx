@@ -31,13 +31,11 @@ export default function ManageCourseLectures() {
     try {
       setLoading(true);
       
-      // Fetch course
       const courseRes = await courseApi.getCourse(Number(courseId));
       if (courseRes.success && courseRes.data) {
         setCourse((courseRes.data as any).course);
       }
 
-      // Fetch lectures
       const lecturesRes = await lectureApi.getCourseLectures(Number(courseId));
       if (lecturesRes.success && lecturesRes.data) {
         setLectures((lecturesRes.data as any).lectures || []);
@@ -58,7 +56,7 @@ export default function ManageCourseLectures() {
       course_id: Number(courseId),
       number: editingLecture ? editingLecture.number : lectures.length + 1,
       title: formData.title,
-      lessons: 0,  // Will be auto-calculated from resources
+      lessons: 0,
       duration: formData.duration,
     };
 
@@ -121,7 +119,6 @@ export default function ManageCourseLectures() {
       <Header />
       
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
         <div className="mb-6">
           <Link href="/dashboard" className="text-blue-600 hover:underline">Dashboard</Link>
           <span className="mx-2">/</span>
@@ -132,7 +129,6 @@ export default function ManageCourseLectures() {
           <span className="text-gray-600">Lectures</span>
         </div>
 
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Course Lectures</h1>
@@ -149,7 +145,6 @@ export default function ManageCourseLectures() {
           </button>
         </div>
 
-        {/* Messages */}
         {message && (
           <div className="mb-4 p-4 bg-green-100 text-green-800 rounded-lg">
             {message}
@@ -161,7 +156,6 @@ export default function ManageCourseLectures() {
           </div>
         )}
 
-        {/* Lectures List */}
         <div className="space-y-4">
           {lectures.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-12 text-center">
@@ -220,7 +214,6 @@ export default function ManageCourseLectures() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">

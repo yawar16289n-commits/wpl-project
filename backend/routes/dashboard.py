@@ -4,10 +4,6 @@ from database import db
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
-# =====================================================
-# STUDENT DASHBOARD
-# =====================================================
-
 @dashboard_bp.route('/student/<int:user_id>', methods=['GET'])
 def get_student_dashboard(user_id):
     user = User.query.get(user_id)
@@ -60,10 +56,6 @@ def get_student_dashboard(user_id):
     }), 200
 
 
-# =====================================================
-# INSTRUCTOR DASHBOARD
-# =====================================================
-
 @dashboard_bp.route('/instructor/<int:user_id>', methods=['GET'])
 def get_instructor_dashboard(user_id):
     user = User.query.get(user_id)
@@ -108,10 +100,6 @@ def get_instructor_dashboard(user_id):
         'total': len(courses_with_stats)
     }), 200
 
-
-# =====================================================
-# ADMIN DASHBOARD
-# =====================================================
 
 @dashboard_bp.route('/admin', methods=['GET'])
 def get_admin_dashboard():

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
-// Helper function to validate and sanitize image URLs
 const getValidImageUrl = (url: string | null | undefined): string => {
   if (!url) return '/placeholder.svg';
   
@@ -13,7 +12,6 @@ const getValidImageUrl = (url: string | null | undefined): string => {
       return url;
     }
   } catch (e) {
-    // Invalid URL, return placeholder
   }
   
   return '/placeholder.svg';

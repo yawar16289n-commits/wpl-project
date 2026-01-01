@@ -4,7 +4,6 @@ from database import db
 
 lectures_bp = Blueprint('lectures', __name__, url_prefix='/lectures')
 
-# Create Lecture (POST)
 @lectures_bp.route('/', methods=['POST'])
 def create_lecture():
     data = request.get_json()
@@ -15,7 +14,6 @@ def create_lecture():
             'error': 'course_id, title, and number are required'
         }), 400
     
-    # Check if course exists
     from models import Course
     course = Course.query.get(data['course_id'])
     if not course:
@@ -42,7 +40,6 @@ def create_lecture():
     }), 201
 
 
-# Get All Lectures (GET)
 @lectures_bp.route('/', methods=['GET'])
 def get_all_lectures():
     course_id = request.args.get('course_id')
@@ -58,7 +55,6 @@ def get_all_lectures():
     }), 200
 
 
-# Get Lecture by ID (GET)
 @lectures_bp.route('/<int:lecture_id>', methods=['GET'])
 def get_lecture(lecture_id):
     lecture = CourseModule.query.get(lecture_id)
@@ -75,7 +71,6 @@ def get_lecture(lecture_id):
     }), 200
 
 
-# Update Lecture (PUT)
 @lectures_bp.route('/<int:lecture_id>', methods=['PUT'])
 def update_lecture(lecture_id):
     lecture = CourseModule.query.get(lecture_id)
@@ -106,7 +101,6 @@ def update_lecture(lecture_id):
     }), 200
 
 
-# Delete Lecture (DELETE)
 @lectures_bp.route('/<int:lecture_id>', methods=['DELETE'])
 def delete_lecture(lecture_id):
     lecture = CourseModule.query.get(lecture_id)

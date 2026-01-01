@@ -29,13 +29,11 @@ export default function LearnLayout({
                     return;
                 }
 
-                // Fetch course details
                 const courseRes = await courseApi.getCourse(courseId);
                 if (courseRes.success && courseRes.data) {
                     setCourse((courseRes.data as any).course);
                 }
 
-                // Fetch course modules
                 const lecturesRes = await lectureApi.getCourseLectures(courseId);
                 if (lecturesRes.success && lecturesRes.data) {
                     setModules((lecturesRes.data as any).lectures || []);
@@ -61,15 +59,13 @@ export default function LearnLayout({
     }
 
     if (!course) {
-        return null; // Handle error or redirect
+        return null;
     }
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden">
-            {/* Sidebar - Persistent */}
             <CourseSidebar courseId={courseId} modules={modules} />
 
-            {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
                 <TopNavigation courseId={courseId} courseTitle={course.title} />
 

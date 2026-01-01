@@ -145,7 +145,6 @@ export const adminApi = {
   },
 
   deleteUser: async (userId: number, adminId: number) => {
-    // Now uses the unified /users/<id> endpoint with admin credentials
     return apiCall(`/users/${userId}`, {
       method: 'DELETE',
       headers: {
@@ -379,7 +378,6 @@ export const lectureResourceApi = {
 };
 
 export const progressApi = {
-  // Toggle lecture resource completion (complete/uncomplete)
   toggleLectureCompletion: async (enrollmentId: number, lectureResourceId: number) => {
     return apiCall('/progress/toggle', {
       method: 'POST',
@@ -390,14 +388,12 @@ export const progressApi = {
     });
   },
 
-  // Get course progress percentage
   getCourseProgress: async (enrollmentId: number) => {
     return apiCall(`/progress/course/${enrollmentId}`, {
       method: 'GET',
     });
   },
 
-  // Get completed lectures for an enrollment
   getCompletedLectures: async (enrollmentId: number) => {
     return apiCall(`/progress/completed/${enrollmentId}`, {
       method: 'GET',

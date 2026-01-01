@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    
     DEBUG = os.getenv('FLASK_DEBUG', 'True') == 'True'
     
     DB_HOST = os.getenv('DB_HOST')

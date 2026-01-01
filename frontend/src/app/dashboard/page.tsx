@@ -70,7 +70,6 @@ interface UserData {
   created_at: string;
 }
 
-// Helper function to validate and sanitize image URLs
 const getValidImageUrl = (url: string | null | undefined): string => {
   if (!url) return '/placeholder.svg';
   
@@ -82,7 +81,6 @@ const getValidImageUrl = (url: string | null | undefined): string => {
       return url;
     }
   } catch (e) {
-    // Invalid URL, return placeholder
   }
   
   return '/placeholder.svg';
@@ -101,7 +99,6 @@ export default function Dashboard() {
   const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null);
   const [deletingCourse, setDeletingCourse] = useState(false);
   
-  // Admin-specific states
   const [users, setUsers] = useState<UserData[]>([]);
   const [userFilter, setUserFilter] = useState('active');
   const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
@@ -132,10 +129,8 @@ export default function Dashboard() {
         }
 
         if (response.success && response.data) {
-          // Dashboard API returns data directly, not nested in 'dashboard'
           const data = response.data as any;
           
-          // Transform the admin dashboard response
           if (userRole === 'admin' && data.stats) {
             const transformedData: DashboardData = {
               user: user,
@@ -143,13 +138,12 @@ export default function Dashboard() {
             };
             setDashboardData(transformedData);
           } else if (userRole !== 'instructor' && userRole !== 'admin' && data.courses) {
-            // Map API response to component format
             const mappedCourses = data.courses.map((item: any) => ({
               id: item.enrollment_id,
               user_id: userId,
               course_id: item.course.id,
               enrolled_at: item.enrolled_at,
-              progress: item.progress_percentage, // API returns progress_percentage
+              progress: item.progress_percentage,
               status: item.status,
               course: item.course
             }));
@@ -168,7 +162,6 @@ export default function Dashboard() {
             };
             setDashboardData(transformedData);
           } else if (userRole === 'instructor' && data.courses) {
-            // Transform instructor dashboard
             const transformedData: DashboardData = {
               user: user,
               created_courses: {
@@ -226,7 +219,6 @@ export default function Dashboard() {
     fetchDashboard();
   }, []);
 
-  // Admin: Fetch users
   const fetchUsers = async () => {
     try {
       const userStr = localStorage.getItem('user');
@@ -248,14 +240,12 @@ export default function Dashboard() {
     }
   };
 
-  // Admin: Watch user filter changes and fetch users when dashboard loads
   useEffect(() => {
     if (dashboardData?.user?.role === 'admin') {
       fetchUsers();
     }
   }, [userFilter, dashboardData]);
 
-  // Admin: Delete user handler
   const handleDeleteUser = async () => {
     if (!selectedUser || !dashboardData) return;
 
@@ -278,7 +268,6 @@ export default function Dashboard() {
   };
 
   const handleContinueLearning = async (enrollment: EnrollmentData) => {
-    // Simply navigate to the course learning page
     window.location.href = `/learn/${enrollment.course.id}`;
   };
 
@@ -291,7 +280,6 @@ export default function Dashboard() {
       const response = await enrollmentApi.unenroll(selectedEnrollment.id);
 
       if (response.success) {
-        // Refresh dashboard data
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const user = JSON.parse(userStr);
@@ -299,7 +287,6 @@ export default function Dashboard() {
           if (refreshResponse.success && refreshResponse.data) {
             const data = refreshResponse.data as any;
             
-            // Map API response to component format (same as in useEffect)
             const mappedCourses = data.courses.map((item: any) => ({
               id: item.enrollment_id,
               user_id: user.id,
@@ -473,10 +460,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Admin Dashboard */}
         {isAdmin && (
           <>
-            {/* Admin Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
@@ -535,7 +520,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Users Management */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-center">
@@ -983,7 +967,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Delete User Modal (Admin) */}
       {showDeleteUserModal && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">

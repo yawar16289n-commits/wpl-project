@@ -30,20 +30,17 @@ export default function LearnCoursePage() {
         try {
             setLoading(true);
 
-            // Fetch course
-            const courseRes = await courseApi.getCourse(Number(courseId));
+                const courseRes = await courseApi.getCourse(Number(courseId));
             if (courseRes.success && courseRes.data) {
                 setCourse((courseRes.data as any).course);
             }
 
-            // Fetch lectures
             const lecturesRes = await lectureApi.getCourseLectures(Number(courseId));
             if (lecturesRes.success && lecturesRes.data) {
                 const lecturesData = (lecturesRes.data as any).lectures || [];
                 setLectures(lecturesData);
 
-                // Redirect to first lesson if available
-                if (lecturesData.length > 0) {
+                    if (lecturesData.length > 0) {
                     const firstLecture = lecturesData[0];
                     const lessonsRes = await lectureResourceApi.getLectureResources(firstLecture.id);
                     if (lessonsRes.success && lessonsRes.data) {
@@ -55,7 +52,6 @@ export default function LearnCoursePage() {
                 }
             }
 
-            // Check enrollment
             const enrollmentRes = await enrollmentApi.checkEnrollment(userData.id, Number(courseId));
             if (enrollmentRes.success && enrollmentRes.data) {
                 if (!(enrollmentRes.data as any).enrolled) {

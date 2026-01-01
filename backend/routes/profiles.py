@@ -6,9 +6,6 @@ import json
 
 profiles_bp = Blueprint('profiles', __name__, url_prefix='/profiles')
 
-# ----------------------
-# Helpers
-# ----------------------
 def get_user(user_id):
     return User.query.get(user_id)
 
@@ -25,9 +22,6 @@ def get_or_create_profile(user_id):
 def json_response(success=True, **kwargs):
     return jsonify({'success': success, **kwargs})
 
-# ----------------------
-# Create Profile
-# ----------------------
 @profiles_bp.route('/', methods=['POST'])
 def create_profile():
     data = request.get_json()
@@ -62,9 +56,6 @@ def create_profile():
         'profile_picture': profile.profile_picture
     }), 201
 
-# ----------------------
-# Get Profile
-# ----------------------
 @profiles_bp.route('/<int:user_id>', methods=['GET'])
 def get_profile(user_id):
     user = get_user(user_id)
@@ -79,7 +70,6 @@ def get_profile(user_id):
         'profile_picture': profile.profile_picture if profile else None
     }
     
-    # If instructor, add their courses
     if user.role == 'instructor':
         courses = Course.query.filter_by(instructor_id=user_id, status='active').all()
         data['courses'] = [c.to_dict() for c in courses]
@@ -87,9 +77,6 @@ def get_profile(user_id):
     
     return json_response(profile=data)
 
-# ----------------------
-# Get My Profile (includes full data)
-# ----------------------
 @profiles_bp.route('/my-profile/<int:user_id>', methods=['GET'])
 @require_owner
 def get_my_profile(user_id):
@@ -97,9 +84,6 @@ def get_my_profile(user_id):
     if not user: return user_not_found()
     return json_response(profile=user.to_dict(include_profile=True))
 
-# ----------------------
-# Update Profile
-# ----------------------
 @profiles_bp.route('/<int:user_id>', methods=['PUT'])
 @require_owner
 def update_profile(user_id):
@@ -118,9 +102,6 @@ def update_profile(user_id):
     db.session.commit()
     return json_response(message='Profile updated successfully', profile=user.to_dict(include_profile=True))
 
-# ----------------------
-# Delete Profile
-# ----------------------
 @profiles_bp.route('/<int:user_id>', methods=['DELETE'])
 @require_owner
 def delete_profile(user_id):

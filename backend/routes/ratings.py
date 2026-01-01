@@ -4,7 +4,6 @@ from models import Rating
 
 ratings_bp = Blueprint('ratings', __name__, url_prefix='/ratings')
 
-# Create Rating (POST)
 @ratings_bp.route('/', methods=['POST'])
 def create_rating():
     data = request.get_json()
@@ -15,7 +14,6 @@ def create_rating():
             'error': 'course_id, user_id, and rating are required'
         }), 400
     
-    # Validate rating value
     rating_value = data['rating']
     if not isinstance(rating_value, int) or rating_value < 1 or rating_value > 5:
         return jsonify({
@@ -23,11 +21,9 @@ def create_rating():
             'error': 'Rating must be between 1 and 5'
         }), 400
     
-    # Check if user already rated this course
     existing_rating = Rating.query.filter_by(user_id=data['user_id'], course_id=data['course_id']).first()
     
     if existing_rating:
-        # Update existing rating
         existing_rating.rating = rating_value
         db.session.commit()
         
@@ -37,7 +33,6 @@ def create_rating():
             'rating': existing_rating.to_dict()
         }), 200
     
-    # Create new rating
     new_rating = Rating(
         course_id=data['course_id'],
         user_id=data['user_id'],
@@ -53,7 +48,6 @@ def create_rating():
         'rating': new_rating.to_dict()
     }), 201
 
-# Get User's Ratings (GET)
 @ratings_bp.route('/user/<int:user_id>', methods=['GET'])
 def get_user_ratings(user_id):
     course_id = request.args.get('course_id')
@@ -80,7 +74,6 @@ def get_user_ratings(user_id):
     }), 200
 
 
-# Get Average Rating for Course (GET)
 @ratings_bp.route('/course/<int:course_id>/average', methods=['GET'])
 def get_average_rating(course_id):
     from models import Course
@@ -93,7 +86,6 @@ def get_average_rating(course_id):
             'error': 'Course not found'
         }), 404
     
-    # Calculate average rating from Rating table
     rating_stats = db.session.query(
         func.avg(Rating.rating).label('avg_rating'),
         func.count(Rating.id).label('total_ratings')
@@ -113,7 +105,6 @@ def get_average_rating(course_id):
     }), 200
 
 
-# Delete Rating (DELETE)
 @ratings_bp.route('/<int:rating_id>', methods=['DELETE'])
 def delete_rating(rating_id):
     rating = Rating.query.get(rating_id)

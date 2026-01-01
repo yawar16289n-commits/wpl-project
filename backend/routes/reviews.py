@@ -4,7 +4,6 @@ from models import Review, User, Course
 
 reviews_bp = Blueprint('reviews', __name__, url_prefix='/reviews')
 
-# Create Review (POST)
 @reviews_bp.route('/', methods=['POST'])
 def create_review():
     data = request.get_json()
@@ -18,28 +17,24 @@ def create_review():
     course = Course.query.get(data['course_id'])
     user = User.query.get(data['user_id'])
     
-    # Verify course exists
     if not course:
         return jsonify({
             'success': False,
             'error': 'Course not found'
         }), 404
     
-    # Verify user exists
     if not user:
         return jsonify({
             'success': False,
             'error': 'User not found'
         }), 404
     
-    # Instructors cannot submit reviews
     if user.role == 'instructor':
         return jsonify({
             'success': False,
             'error': 'Instructors cannot submit reviews'
         }), 403
     
-    # Check if user already reviewed this course
     existing_review = Review.query.filter_by(
         course_id=data['course_id'],
         user_id=data['user_id'],
@@ -47,7 +42,6 @@ def create_review():
     ).first()
     
     if existing_review:
-        # Update existing review instead of creating duplicate
         existing_review.comment = data['comment']
         from datetime import datetime
         existing_review.updated_at = datetime.utcnow()
@@ -59,7 +53,6 @@ def create_review():
             'review': existing_review.to_dict(include_user=True)
         }), 200
     
-    # Create new review
     new_review = Review(
         course_id=data['course_id'],
         user_id=data['user_id'],
@@ -76,7 +69,6 @@ def create_review():
     }), 201
 
 
-# Get Reviews for Course (GET)
 @reviews_bp.route('/course/<int:course_id>', methods=['GET'])
 def get_course_reviews(course_id):
     reviews = Review.query.filter_by(
@@ -90,7 +82,6 @@ def get_course_reviews(course_id):
     }), 200
 
 
-# Update Review (PUT)
 @reviews_bp.route('/<int:review_id>', methods=['PUT'])
 def update_review(review_id):
     data = request.get_json()
@@ -114,7 +105,6 @@ def update_review(review_id):
     }), 200
 
 
-# Delete Review (DELETE)
 @reviews_bp.route('/<int:review_id>', methods=['DELETE'])
 def delete_review(review_id):
     review = Review.query.get(review_id)
@@ -125,7 +115,6 @@ def delete_review(review_id):
             'error': 'Review not found'
         }), 404
     
-    # Soft delete: set status to deleted
     review.status = 'deleted'
     db.session.commit()
     

@@ -6,7 +6,6 @@ from datetime import datetime
 enrollments_bp = Blueprint('enrollments', __name__, url_prefix='/enrollments')
 
 
-# Create Enrollment (POST)
 @enrollments_bp.route('/', methods=['POST'])
 def enroll_in_course():
     from routes.progress import initialize_progress_for_enrollment
@@ -81,7 +80,6 @@ def enroll_in_course():
     }), 201
 
 
-# --- Get All Enrollments ---
 @enrollments_bp.route('/', methods=['GET'])
 def get_all_enrollments():
     user_id = request.args.get('user_id')
@@ -100,7 +98,6 @@ def get_all_enrollments():
     return jsonify({'success': True, 'enrollments': [e.to_dict(include_course=True) for e in enrollments], 'total': len(enrollments)}), 200
 
 
-# --- Get Enrollment by ID ---
 @enrollments_bp.route('/<int:enrollment_id>', methods=['GET'])
 def get_enrollment(enrollment_id):
     enrollment = Enrollment.query.get(enrollment_id)
@@ -109,7 +106,6 @@ def get_enrollment(enrollment_id):
     return jsonify({'success': True, 'enrollment': enrollment.to_dict(include_course=True)}), 200
 
 
-# --- Delete / Unenroll ---
 @enrollments_bp.route('/<int:enrollment_id>', methods=['DELETE'])
 def unenroll_from_course(enrollment_id):
     try:
@@ -130,7 +126,6 @@ def unenroll_from_course(enrollment_id):
         return jsonify({'success': False, 'error': f'Failed to unenroll: {str(e)}'}), 500
 
 
-# --- Get User Enrollments ---
 @enrollments_bp.route('/user/<int:user_id>', methods=['GET'])
 def get_user_enrollments(user_id):
     user = User.query.get(user_id)
@@ -149,7 +144,6 @@ def get_user_enrollments(user_id):
     }), 200
 
 
-# --- Check if user is enrolled in a course ---
 @enrollments_bp.route('/check/<int:user_id>/<int:course_id>', methods=['GET'])
 def check_enrollment(user_id, course_id):
     enrollment = Enrollment.query.filter_by(

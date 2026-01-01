@@ -11,10 +11,8 @@ def create_app():
     
     app.config.from_object(Config)
     
-    # Disable automatic trailing slash redirects
     app.url_map.strict_slashes = False
 
-    # Configure CORS with credentials support
     CORS(app, 
          origins=["http://localhost:3000"],
          allow_headers=["Content-Type", "X-User-Id"],

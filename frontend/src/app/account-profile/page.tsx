@@ -307,7 +307,6 @@ export default function AccountProfile() {
                 </div>
               </div>
 
-              {/* Password Update Section */}
               <div className="mt-12 pt-8 border-t border-gray-200">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Change Password</h3>
                 {passwordMessage && (
@@ -357,7 +356,6 @@ export default function AccountProfile() {
                 </div>
               </div>
 
-              {/* Delete Account Section */}
               <div className="mt-12 pt-8 border-t border-gray-200">
                 <h3 className="text-xl font-bold text-red-600 mb-2">Danger Zone</h3>
                 <p className="text-gray-600 mb-4">Once you delete your account, there is no going back. Please be certain.</p>

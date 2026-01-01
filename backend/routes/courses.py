@@ -6,7 +6,6 @@ from datetime import datetime
 
 courses_bp = Blueprint('courses', __name__, url_prefix='/courses')
 
-# Create Course (POST)
 @courses_bp.route('/', methods=['POST'])
 def create_course():
     try:
@@ -65,7 +64,6 @@ def create_course():
         }), 500
 
 
-# Get All Courses (GET)
 @courses_bp.route('/', methods=['GET'])
 def get_all_courses():
     category = request.args.get('category')
@@ -96,7 +94,6 @@ def get_all_courses():
     }), 200
 
 
-# Get Course by ID (GET)
 @courses_bp.route('/<int:course_id>', methods=['GET'])
 def get_course(course_id):
     from models import Course
@@ -115,7 +112,6 @@ def get_course(course_id):
     }), 200
 
 
-# Update Course (PUT)
 @courses_bp.route('/<int:course_id>', methods=['PUT'])
 def update_course(course_id):
     course = Course.query.get(course_id)
@@ -156,7 +152,6 @@ def update_course(course_id):
     }), 200
 
 
-# Delete Course (DELETE)
 @courses_bp.route('/<int:course_id>', methods=['DELETE'])
 def delete_course(course_id):
     course = Course.query.get(course_id)
@@ -177,7 +172,6 @@ def delete_course(course_id):
     }), 200
 
 
-# Search/Filter Courses (migrated from search.py)
 @courses_bp.route('/search', methods=['GET'])
 def search_courses():
     from models import User
@@ -189,7 +183,6 @@ def search_courses():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
-    # Only show active courses for public search
     query = Course.query.join(User).filter(Course.status == 'active')
     
     if q:
@@ -206,11 +199,9 @@ def search_courses():
     if level:
         query = query.filter(Course.level == level)
     
-    # Sorting
     if sort == 'title':
         query = query.order_by(Course.title)
     else:
-        # Default to newest first
         query = query.order_by(Course.created_at.desc())
     
     paginated = query.paginate(page=page, per_page=per_page)

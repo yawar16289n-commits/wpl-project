@@ -36,13 +36,11 @@ export default function ManageLectureLessons() {
     try {
       setLoading(true);
       
-      // Fetch lecture
       const lectureRes = await lectureApi.getLecture(Number(lectureId));
       if (lectureRes.success && lectureRes.data) {
         setLecture((lectureRes.data as any).lecture);
       }
 
-      // Fetch lessons (using resource API but treating as lessons)
       const lessonsRes = await lectureResourceApi.getLectureResources(Number(lectureId));
       if (lessonsRes.success && lessonsRes.data) {
         setLessons((lessonsRes.data as any).resources || []);
@@ -136,7 +134,6 @@ export default function ManageLectureLessons() {
       <Header />
       
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
         <div className="mb-6">
           <Link href="/dashboard" className="text-blue-600 hover:underline">Dashboard</Link>
           <span className="mx-2">/</span>
@@ -147,7 +144,6 @@ export default function ManageLectureLessons() {
           <span className="text-gray-600">Lessons</span>
         </div>
 
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Lecture Lessons</h1>
@@ -164,7 +160,6 @@ export default function ManageLectureLessons() {
           </button>
         </div>
 
-        {/* Messages */}
         {message && (
           <div className="mb-4 p-4 bg-green-100 text-green-800 rounded-lg">
             {message}
@@ -176,7 +171,6 @@ export default function ManageLectureLessons() {
           </div>
         )}
 
-        {/* Lessons List */}
         <div className="space-y-4">
           {lessons.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-12 text-center">
@@ -239,7 +233,6 @@ export default function ManageLectureLessons() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">

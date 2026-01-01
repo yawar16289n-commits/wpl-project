@@ -30,7 +30,6 @@ export default function SearchPage() {
   const [selectedLevel, setSelectedLevel] = useState<string>('');
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
-  // Fetch all courses first to get available categories
   useEffect(() => {
     const fetchAllCourses = async () => {
       try {

@@ -10,9 +10,8 @@ def initialize_progress_for_enrollment(enrollment_id):
     """Create Progress rows for all lectures for a new enrollment"""
     enrollment = Enrollment.query.get(enrollment_id)
     if not enrollment or enrollment.status in ['deleted', 'dropped']:
-        return  # Do nothing if enrollment is invalid
+        return
     
-    # Get all active lectures for the course
     lectures = db.session.query(LectureResource).join(
         CourseModule, LectureResource.lecture_id == CourseModule.id
     ).filter(
@@ -22,7 +21,6 @@ def initialize_progress_for_enrollment(enrollment_id):
     ).all()
     
     for lecture in lectures:
-        # Only create if not already exists
         existing = Progress.query.filter_by(
             enrollment_id=enrollment.id,
             lecture_resource_id=lecture.id
@@ -38,16 +36,13 @@ def initialize_progress_for_enrollment(enrollment_id):
     db.session.commit()
 
 
-# Toggle Lecture Resource Completion (Complete/Uncomplete)
 @progress_bp.route('/toggle', methods=['POST'])
 def toggle_lecture_completion():
     data = request.get_json()
     
-    # Support both enrollment_id and course_id+user_id
     enrollment_id = data.get('enrollment_id')
     
     if not enrollment_id:
-        # Try to find enrollment by course_id and user_id
         course_id = data.get('course_id')
         user_id = data.get('user_id')
         
@@ -87,14 +82,11 @@ def toggle_lecture_completion():
     ).first()
 
     if progress:
-        # Toggle completion status
         if progress.completed:
-            # Mark as incomplete
             progress.completed = False
             progress.completed_at = None
             message = 'Lecture marked as incomplete'
         else:
-            # Mark as complete
             progress.completed = True
             progress.completed_at = datetime.utcnow()
             message = 'Lecture marked as complete'
@@ -103,12 +95,10 @@ def toggle_lecture_completion():
     else:
         return jsonify({'success': False, 'error': 'Progress record not found'}), 404
 
-    # Update course completion status
     total_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, status='active').count()
     completed_lectures = Progress.query.filter_by(enrollment_id=enrollment_id, completed=True, status='active').count()
     course_progress = int((completed_lectures / total_lectures) * 100) if total_lectures else 0
 
-    # Update enrollment status based on progress
     if course_progress >= 100:
         enrollment.status = 'completed'
         enrollment.completed_at = datetime.utcnow()
@@ -130,7 +120,6 @@ def toggle_lecture_completion():
     }), 200
 
 
-# Get Course Progress
 @progress_bp.route('/course/<int:enrollment_id>', methods=['GET'])
 def get_course_progress(enrollment_id):
     enrollment = Enrollment.query.get(enrollment_id)
@@ -153,7 +142,6 @@ def get_course_progress(enrollment_id):
     }), 200
 
 
-# Get all completed lectures by enrollment_id
 @progress_bp.route('/completed/<int:enrollment_id>', methods=['GET'])
 def get_completed_lectures(enrollment_id):
     enrollment = Enrollment.query.get(enrollment_id)

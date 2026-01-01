@@ -32,30 +32,25 @@ export default function LessonPage() {
         try {
             setLoading(true);
 
-            // Fetch lesson
             const lessonRes = await lectureResourceApi.getResource(Number(lessonId));
             if (lessonRes.success && lessonRes.data) {
                 setLesson((lessonRes.data as any).resource);
             }
 
-            // Fetch lecture
             const lectureRes = await lectureApi.getLecture(Number(lectureId));
             if (lectureRes.success && lectureRes.data) {
                 setLecture((lectureRes.data as any).lecture);
             }
 
-            // Check if lesson is completed
             const userData = localStorage.getItem('user');
             if (userData) {
                 const userId = JSON.parse(userData).id;
                 
-                // Fetch enrollment
                 const enrollmentRes = await enrollmentApi.checkEnrollment(userId, Number(courseId));
                 if (enrollmentRes.success && enrollmentRes.data) {
                     const enrollmentData = (enrollmentRes.data as any).enrollment;
                     setEnrollment(enrollmentData);
                     
-                    // Check completed lectures using new API
                     if (enrollmentData) {
                         const completedRes = await progressApi.getCompletedLectures(enrollmentData.id);
                         if (completedRes.success && completedRes.data) {
@@ -118,7 +113,6 @@ export default function LessonPage() {
 
     return (
         <div className="max-w-4xl mx-auto">
-            {/* Messages */}
             {error && (
                 <div className="mb-4 p-4 bg-red-100 text-red-800 rounded-lg">
                     {error}
@@ -130,7 +124,6 @@ export default function LessonPage() {
                 </div>
             )}
 
-            {/* Lesson Content */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6">
                 <div className="flex items-center gap-3 mb-6">
                     <span className="text-4xl bg-gray-100 p-3 rounded-lg">
@@ -151,7 +144,6 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Video Lesson */}
                 {lesson?.resource_type === 'video' && lesson?.url && (
                     <div className="mb-8">
                         <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-lg">
@@ -181,7 +173,6 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Text Lesson */}
                 {lesson?.resource_type === 'text' && lesson?.content && (
                     <div className="prose prose-lg max-w-none mb-8">
                         <div className="bg-gray-50 rounded-xl p-8 whitespace-pre-wrap font-serif leading-relaxed text-gray-800">
@@ -190,7 +181,6 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Toggle Completion Button */}
                 <div className="flex justify-end pt-6 border-t border-gray-100">
                     {isCompleted ? (
                         <button

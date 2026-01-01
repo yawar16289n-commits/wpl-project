@@ -7,7 +7,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '@/app/components/Header';
 import ReviewsRatings from '@/app/components/ReviewsRatings';
 import { courseApi, enrollmentApi, lectureResourceApi } from '@/lib/api';
-import { getCurrentUser, canEnroll } from '@/lib/auth';
 
 export default function CourseDetail() {
   const params = useParams();
@@ -18,7 +17,6 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
-  const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollmentMessage, setEnrollmentMessage] = useState<string | null>(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
@@ -45,9 +43,6 @@ export default function CourseDetail() {
             if (enrollmentCheck.success && enrollmentCheck.data) {
               const enrollmentData = enrollmentCheck.data as { enrolled: boolean; enrollment_id?: number };
               setIsEnrolled(enrollmentData.enrolled);
-              if (enrollmentData.enrollment_id) {
-                setEnrollmentId(enrollmentData.enrollment_id);
-              }
             }
           }
         } else {
@@ -71,14 +66,12 @@ export default function CourseDetail() {
 
       const userStr = localStorage.getItem('user');
       if (!userStr) {
-        // Redirect to home page where login modal can be triggered
         router.push('/?showLogin=true');
         return;
       }
 
       const user = JSON.parse(userStr);
       
-      // Check if user is instructor (instructors cannot enroll)
       if (user.role === 'instructor') {
         setEnrollmentMessage('Instructors cannot enroll in courses. Only students can enroll.');
         return;
@@ -315,7 +308,6 @@ export default function CourseDetail() {
                         newExpanded.delete(module.id);
                       } else {
                         newExpanded.add(module.id);
-                        // Fetch lessons if not already loaded
                         if (!moduleLessons[module.id]) {
                           try {
                             const response = await lectureResourceApi.getLectureResources(module.id);

@@ -31,7 +31,6 @@ export default function LoginModal({ onClose, onSignup }: LoginModalProps) {
         localStorage.setItem('user', JSON.stringify(userData.user));
         onClose();
         
-        // Redirect to unified dashboard
         router.push('/dashboard');
       } else {
         setError('Login failed');

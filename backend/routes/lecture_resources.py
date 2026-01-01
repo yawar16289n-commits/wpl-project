@@ -4,7 +4,6 @@ from database import db
 
 lecture_resources_bp = Blueprint('lecture_resources', __name__, url_prefix='/lecture-resources')
 
-# Create Lecture Resource (POST)
 @lecture_resources_bp.route('/', methods=['POST'])
 def create_lecture_resource():
     try:
@@ -16,7 +15,6 @@ def create_lecture_resource():
                 'error': 'lecture_id, resource_type, and title are required'
             }), 400
         
-        # Check if lecture exists
         lecture = CourseModule.query.get(data['lecture_id'])
         if not lecture:
             return jsonify({
@@ -51,7 +49,6 @@ def create_lecture_resource():
         }), 500
 
 
-# Get All Lecture Resources (GET)
 @lecture_resources_bp.route('/', methods=['GET'])
 def get_all_lecture_resources():
     lecture_id = request.args.get('lecture_id')
@@ -72,7 +69,6 @@ def get_all_lecture_resources():
     }), 200
 
 
-# Get Lecture Resource by ID (GET)
 @lecture_resources_bp.route('/<int:resource_id>', methods=['GET'])
 def get_lecture_resource(resource_id):
     resource = LectureResource.query.get(resource_id)
@@ -89,7 +85,6 @@ def get_lecture_resource(resource_id):
     }), 200
 
 
-# Update Lecture Resource (PUT)
 @lecture_resources_bp.route('/<int:resource_id>', methods=['PUT'])
 def update_lecture_resource(resource_id):
     resource = LectureResource.query.get(resource_id)
@@ -124,7 +119,6 @@ def update_lecture_resource(resource_id):
     }), 200
 
 
-# Delete Lecture Resource (DELETE)
 @lecture_resources_bp.route('/<int:resource_id>', methods=['DELETE'])
 def delete_lecture_resource(resource_id):
     resource = LectureResource.query.get(resource_id)
@@ -135,7 +129,6 @@ def delete_lecture_resource(resource_id):
             'error': 'Resource not found'
         }), 404
     
-    # Soft delete: set status to deleted
     resource.status = 'deleted'
     db.session.commit()
     

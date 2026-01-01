@@ -6,9 +6,6 @@ from datetime import datetime
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
-# ----------------------
-# Helpers
-# ----------------------
 def user_not_found():
     return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -18,9 +15,6 @@ def get_user(user_id):
 def json_response(success=True, **kwargs):
     return jsonify({'success': success, **kwargs})
 
-# ----------------------
-# Create User / Signup
-# ----------------------
 def create_user_helper(data):
     required = ['name', 'email', 'password', 'role']
     if any(k not in data for k in required):
@@ -51,9 +45,6 @@ def signup():
     data = request.get_json()
     return create_user_helper(data)
 
-# ----------------------
-# Login
-# ----------------------
 @users_bp.route('/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -66,10 +57,6 @@ def login():
 
     return json_response(message='Login successful', user=user.to_dict())
 
-# ----------------------
-# Get Users
-# Supports admin filtering by status or regular filtering by role
-# ----------------------
 @users_bp.route('/', methods=['GET'])
 def get_all_users():
     # Check if request is from admin with status filter
@@ -77,7 +64,6 @@ def get_all_users():
     status_filter = request.args.get('status')
     
     if status_filter and admin_id:
-        # Admin can filter by status
         admin = User.query.get(int(admin_id))
         if admin and admin.role == 'admin':
             if status_filter == 'all':
@@ -86,7 +72,6 @@ def get_all_users():
                 users = User.query.filter_by(status=status_filter).all()
             return json_response(users=[u.to_dict() for u in users])
     
-    # Regular role-based filtering
     role = request.args.get('role')
     users = User.query.filter_by(role=role).all() if role else User.query.all()
     return json_response(users=[u.to_dict() for u in users])
@@ -97,9 +82,6 @@ def get_user_by_id(user_id):
     if not user: return user_not_found()
     return json_response(user=user.to_dict())
 
-# ----------------------
-# Update User
-# ----------------------
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @require_owner
 def update_user(user_id):
@@ -116,13 +98,8 @@ def update_user(user_id):
     db.session.commit()
     return json_response(message='User updated successfully', user=user.to_dict())
 
-# ----------------------
-# Delete User (Soft Delete)
-# Can be used by user themselves or by admin
-# ----------------------
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
-    # Get the requesting user ID from header
     requester_id = request.headers.get('X-User-Id')
     if not requester_id:
         return jsonify({'success': False, 'error': 'Authentication required'}), 401
@@ -131,18 +108,15 @@ def delete_user(user_id):
     if not requester:
         return jsonify({'success': False, 'error': 'Requester not found'}), 404
     
-    # Check if requester is admin or the user themselves
     if requester.role != 'admin' and requester.id != user_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
     user = get_user(user_id)
     if not user: return user_not_found()
     
-    # Prevent deletion of admin users (even by other admins)
     if user.role == 'admin':
         return jsonify({'success': False, 'error': 'Cannot delete admin users'}), 403
 
-    # Soft delete - set status to 'deleted'
     user.status = 'deleted'
     db.session.commit()
     return json_response(message='User deleted successfully')

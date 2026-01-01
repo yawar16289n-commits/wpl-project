@@ -2,7 +2,6 @@ from flask import Blueprint
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-# Import and register all route blueprints after api_bp is created
 from routes.users import users_bp
 from routes.profiles import profiles_bp
 from routes.courses import courses_bp
@@ -14,7 +13,6 @@ from routes.ratings import ratings_bp
 from routes.progress import progress_bp
 from routes.dashboard import dashboard_bp
 
-# Register all blueprints with the API
 api_bp.register_blueprint(users_bp)
 api_bp.register_blueprint(profiles_bp)
 api_bp.register_blueprint(courses_bp)

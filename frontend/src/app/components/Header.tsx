@@ -41,7 +41,6 @@ export default function Header() {
     };
 
     if (showDropdown) {
-      // Use setTimeout to ensure the click that opened the dropdown doesn't immediately close it
       setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
       }, 0);
