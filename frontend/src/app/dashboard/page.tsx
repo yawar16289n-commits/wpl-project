@@ -142,8 +142,6 @@ export default function Dashboard() {
               stats: data.stats
             };
             setDashboardData(transformedData);
-            // Fetch users for admin
-            fetchUsers();
           } else if (userRole !== 'instructor' && userRole !== 'admin' && data.courses) {
             // Map API response to component format
             const mappedCourses = data.courses.map((item: any) => ({
@@ -230,23 +228,32 @@ export default function Dashboard() {
 
   // Admin: Fetch users
   const fetchUsers = async () => {
-    if (!dashboardData) return;
     try {
-      const usersRes = await adminApi.getAllUsers(userFilter, dashboardData.user.id);
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return;
+      
+      const user = JSON.parse(userStr);
+      console.log('Fetching users with filter:', userFilter, 'Admin ID:', user.id);
+      const usersRes = await adminApi.getAllUsers(userFilter, user.id);
+      console.log('Users response:', usersRes);
       if (usersRes.success && usersRes.data) {
-        setUsers((usersRes.data as { users: UserData[] }).users);
+        const userData = usersRes.data as { users: UserData[] };
+        console.log('Setting users:', userData.users);
+        setUsers(userData.users);
+      } else {
+        console.error('Failed to fetch users:', usersRes.error);
       }
     } catch (err) {
       console.error('Error fetching users:', err);
     }
   };
 
-  // Admin: Watch user filter changes
+  // Admin: Watch user filter changes and fetch users when dashboard loads
   useEffect(() => {
     if (dashboardData?.user?.role === 'admin') {
       fetchUsers();
     }
-  }, [userFilter]);
+  }, [userFilter, dashboardData]);
 
   // Admin: Delete user handler
   const handleDeleteUser = async () => {
@@ -399,6 +406,11 @@ export default function Dashboard() {
 
   const isInstructor = dashboardData.user.role === 'instructor';
   const isAdmin = dashboardData.user.role === 'admin';
+  
+  console.log('Dashboard data:', dashboardData);
+  console.log('User role:', dashboardData.user.role);
+  console.log('Is Admin:', isAdmin);
+  console.log('Users array:', users);
 
   return (
     <main className="min-h-screen bg-gray-50">

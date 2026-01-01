@@ -31,12 +31,8 @@ export default function LoginModal({ onClose, onSignup }: LoginModalProps) {
         localStorage.setItem('user', JSON.stringify(userData.user));
         onClose();
         
-        // Redirect based on role
-        if (userData.user.role === 'admin') {
-          router.push('/admin/dashboard');
-        } else {
-          router.push('/dashboard');
-        }
+        // Redirect to unified dashboard
+        router.push('/dashboard');
       } else {
         setError('Login failed');
       }

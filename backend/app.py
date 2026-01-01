@@ -10,13 +10,17 @@ def create_app():
     app = Flask(__name__)
     
     app.config.from_object(Config)
+    
+    # Disable automatic trailing slash redirects
+    app.url_map.strict_slashes = False
 
     # Configure CORS with credentials support
     CORS(app, 
          origins=["http://localhost:3000"],
          allow_headers=["Content-Type", "X-User-Id"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=True)
+         supports_credentials=True,
+         expose_headers=["Content-Type", "X-User-Id"])
 
 
     db.init_app(app)
