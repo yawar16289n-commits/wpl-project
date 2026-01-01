@@ -133,15 +133,24 @@ export const adminApi = {
     });
   },
 
-  getAllUsers: async (status: string = 'active') => {
-    return apiCall(`/admin/users?status=${status}`, {
+  getAllUsers: async (status: string = 'active', adminId?: number) => {
+    const headers: Record<string, string> = {};
+    if (adminId) {
+      headers['X-User-Id'] = adminId.toString();
+    }
+    return apiCall(`/users?status=${status}`, {
       method: 'GET',
+      headers,
     });
   },
 
-  deleteUser: async (userId: number) => {
-    return apiCall(`/admin/users/${userId}`, {
+  deleteUser: async (userId: number, adminId: number) => {
+    // Now uses the unified /users/<id> endpoint with admin credentials
+    return apiCall(`/users/${userId}`, {
       method: 'DELETE',
+      headers: {
+        'X-User-Id': adminId.toString(),
+      },
     });
   },
 };
@@ -370,22 +379,9 @@ export const lectureResourceApi = {
 };
 
 export const progressApi = {
-  // New Progress Tracking API (v2)
-  
-  // Mark a lecture resource as complete
-  markLectureComplete: async (enrollmentId: number, lectureResourceId: number) => {
-    return apiCall('/progress/complete', {
-      method: 'POST',
-      body: JSON.stringify({
-        enrollment_id: enrollmentId,
-        lecture_resource_id: lectureResourceId,
-      }),
-    });
-  },
-
-  // Mark a lecture resource as uncomplete
-  markLectureUncomplete: async (enrollmentId: number, lectureResourceId: number) => {
-    return apiCall('/progress/uncomplete', {
+  // Toggle lecture resource completion (complete/uncomplete)
+  toggleLectureCompletion: async (enrollmentId: number, lectureResourceId: number) => {
+    return apiCall('/progress/toggle', {
       method: 'POST',
       body: JSON.stringify({
         enrollment_id: enrollmentId,
@@ -401,71 +397,9 @@ export const progressApi = {
     });
   },
 
-  // Get next incomplete lecture (Continue Learning)
-  getNextLecture: async (enrollmentId: number) => {
-    return apiCall(`/progress/next/${enrollmentId}`, {
-      method: 'GET',
-    });
-  },
-
-  // Get all progress for a user
-  getUserProgress: async (userId: number) => {
-    return apiCall(`/progress/user/${userId}`, {
-      method: 'GET',
-    });
-  },
-
   // Get completed lectures for an enrollment
   getCompletedLectures: async (enrollmentId: number) => {
     return apiCall(`/progress/completed/${enrollmentId}`, {
-      method: 'GET',
-    });
-  },
-
-  // Reset progress for a specific lecture
-  resetLectureProgress: async (enrollmentId: number, lectureResourceId: number) => {
-    return apiCall(`/progress/reset/${enrollmentId}/${lectureResourceId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  // Reset all progress for a course
-  resetCourseProgress: async (enrollmentId: number) => {
-    return apiCall(`/progress/reset/course/${enrollmentId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  // Legacy endpoints (deprecated, kept for backward compatibility)
-  createProgress: async (enrollmentId: number, progress: number) => {
-    console.warn('createProgress is deprecated. Use markLectureComplete instead.');
-    return apiCall('/progress/', {
-      method: 'POST',
-      body: JSON.stringify({ enrollment_id: enrollmentId, progress }),
-    });
-  },
-
-  getProgress: async (enrollmentId: number) => {
-    // Redirect to new endpoint
-    return progressApi.getCourseProgress(enrollmentId);
-  },
-
-  updateProgress: async (enrollmentId: number, progress: number) => {
-    console.warn('updateProgress is deprecated. Use markLectureComplete instead.');
-    return apiCall(`/progress/${enrollmentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ progress }),
-    });
-  },
-
-  resetProgress: async (enrollmentId: number) => {
-    // Redirect to new endpoint
-    return progressApi.resetCourseProgress(enrollmentId);
-  },
-
-  getLessonProgress: async (userId: number, courseId: number) => {
-    console.warn('getLessonProgress is deprecated. Use getCompletedLectures with enrollmentId instead.');
-    return apiCall(`/progress/lessons?user_id=${userId}&course_id=${courseId}`, {
       method: 'GET',
     });
   },

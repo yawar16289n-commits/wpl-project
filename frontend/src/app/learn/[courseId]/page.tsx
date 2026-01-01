@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Header from '@/app/components/Header';
 import { courseApi, lectureApi, lectureResourceApi, enrollmentApi } from '@/lib/api';
 
 export default function LearnCoursePage() {
@@ -75,7 +74,6 @@ export default function LearnCoursePage() {
     if (loading) {
         return (
             <main className="min-h-screen bg-gray-50">
-                <Header />
                 <div className="flex justify-center items-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                 </div>
@@ -85,7 +83,6 @@ export default function LearnCoursePage() {
 
     return (
         <main className="min-h-screen bg-gray-50">
-            <Header />
 
             <div className="max-w-6xl mx-auto px-4 py-8">
                 <div className="text-center">

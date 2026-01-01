@@ -119,13 +119,6 @@ class Course(db.Model):
             modules = CourseModule.query.filter_by(course_id=self.id).order_by(CourseModule.number).all()
             data['courses'] = [module.to_dict() for module in modules]
         
-        if include_details:
-            course_detail = CourseDetail.query.filter_by(course_id=self.id, status='active').first()
-            if course_detail:
-                data['requirements'] = json.loads(course_detail.requirements) if course_detail.requirements else []
-                data['who_is_for'] = json.loads(course_detail.who_is_for) if course_detail.who_is_for else []
-                data['objectives'] = json.loads(course_detail.objectives) if course_detail.objectives else []
-        
         return data
 
 
@@ -314,47 +307,6 @@ class Profile(db.Model):
             'expertise': json.loads(self.expertise) if self.expertise else [],
             'education': json.loads(self.education) if self.education else [],
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
-        }
-
-
-class CourseDetail(db.Model):
-    __tablename__ = 'course_details'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False, unique=True)
-    requirements = db.Column(db.Text, nullable=True)
-    who_is_for = db.Column(db.Text, nullable=True)
-    objectives = db.Column(db.Text, nullable=True)
-    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'course_id': self.course_id,
-            'requirements': json.loads(self.requirements) if self.requirements else [],
-            'who_is_for': json.loads(self.who_is_for) if self.who_is_for else [],
-            'objectives': json.loads(self.objectives) if self.objectives else [],
-            'created_at': self.created_at.isoformat() if self.created_at else None
-        }
-
-
-class CourseCategory(db.Model):
-    __tablename__ = 'course_categories'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
-    slug = db.Column(db.String(100), nullable=False, unique=True)
-    status = db.Column(db.Enum('active', 'deleted'), default='active', nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'slug': self.slug,
-            'status': self.status,
-            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 

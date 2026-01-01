@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from models import Course, User, CourseDetail
+from models import Course, User
 from database import db
 import json
 from datetime import datetime
@@ -48,18 +48,6 @@ def create_course():
         
         db.session.add(new_course)
         db.session.commit()
-        
-        # Create CourseDetail if additional fields provided
-        if any(key in data for key in ['requirements', 'who_is_for', 'objectives']):
-            course_detail = CourseDetail(
-                course_id=new_course.id,
-                requirements=json.dumps(data.get('requirements', [])) if data.get('requirements') else None,
-                who_is_for=json.dumps(data.get('who_is_for', [])) if data.get('who_is_for') else None,
-                objectives=json.dumps(data.get('objectives', [])) if data.get('objectives') else None,
-                status='active'
-            )
-            db.session.add(course_detail)
-            db.session.commit()
         
         return jsonify({
             'success': True,
@@ -160,25 +148,6 @@ def update_course(course_id):
         course.status = data['status']
     
     db.session.commit()
-    
-    # Update CourseDetail if any detail fields provided
-    detail_fields = ['skills', 'requirements', 'who_is_for', 'objectives']
-    if any(key in data for key in detail_fields):
-        course_detail = CourseDetail.query.filter_by(course_id=course_id).first()
-        if not course_detail:
-            course_detail = CourseDetail(course_id=course_id, status='active')
-            db.session.add(course_detail)
-        
-        if 'skills' in data:
-            course_detail.skills = json.dumps(data['skills'])
-        if 'requirements' in data:
-            course_detail.requirements = json.dumps(data['requirements'])
-        if 'who_is_for' in data:
-            course_detail.who_is_for = json.dumps(data['who_is_for'])
-        if 'objectives' in data:
-            course_detail.objectives = json.dumps(data['objectives'])
-        
-        db.session.commit()
     
     return jsonify({
         'success': True,

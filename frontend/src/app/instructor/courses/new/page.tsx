@@ -17,8 +17,6 @@ export default function CreateCourse() {
     duration: '',
     image: '',
     language: 'English',
-    skills: '',
-    learning_outcomes: '',
   });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -44,14 +42,7 @@ export default function CreateCourse() {
 
     if (!user) return;
 
-    const courseData = {
-      ...formData,
-      instructor_id: user.id,
-      skills: formData.skills.split(',').map((s) => s.trim()).filter((s) => s),
-      learning_outcomes: formData.learning_outcomes.split('\n').filter((s) => s.trim()),
-    };
-
-    const response = await courseApi.createCourse(courseData);
+    const response = await courseApi.createCourse(formData);
 
     if (response.success) {
       router.push('/dashboard');
@@ -189,32 +180,6 @@ export default function CreateCourse() {
               onChange={(e) => setFormData({ ...formData, image: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="https://example.com/image.jpg"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Skills (comma-separated)
-            </label>
-            <input
-              type="text"
-              value={formData.skills}
-              onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Python, Django, REST APIs"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Learning Outcomes (one per line)
-            </label>
-            <textarea
-              value={formData.learning_outcomes}
-              onChange={(e) => setFormData({ ...formData, learning_outcomes: e.target.value })}
-              rows={5}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Build web applications&#10;Master Python fundamentals&#10;Deploy to production"
             />
           </div>
 

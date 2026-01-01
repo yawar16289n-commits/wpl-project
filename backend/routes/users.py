@@ -68,9 +68,25 @@ def login():
 
 # ----------------------
 # Get Users
+# Supports admin filtering by status or regular filtering by role
 # ----------------------
 @users_bp.route('/', methods=['GET'])
 def get_all_users():
+    # Check if request is from admin with status filter
+    admin_id = request.headers.get('X-User-Id')
+    status_filter = request.args.get('status')
+    
+    if status_filter and admin_id:
+        # Admin can filter by status
+        admin = User.query.get(int(admin_id))
+        if admin and admin.role == 'admin':
+            if status_filter == 'all':
+                users = User.query.all()
+            else:
+                users = User.query.filter_by(status=status_filter).all()
+            return json_response(users=[u.to_dict() for u in users])
+    
+    # Regular role-based filtering
     role = request.args.get('role')
     users = User.query.filter_by(role=role).all() if role else User.query.all()
     return json_response(users=[u.to_dict() for u in users])
@@ -102,12 +118,29 @@ def update_user(user_id):
 
 # ----------------------
 # Delete User (Soft Delete)
+# Can be used by user themselves or by admin
 # ----------------------
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
-@require_owner
 def delete_user(user_id):
+    # Get the requesting user ID from header
+    requester_id = request.headers.get('X-User-Id')
+    if not requester_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+    
+    requester = User.query.get(int(requester_id))
+    if not requester:
+        return jsonify({'success': False, 'error': 'Requester not found'}), 404
+    
+    # Check if requester is admin or the user themselves
+    if requester.role != 'admin' and requester.id != user_id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
     user = get_user(user_id)
     if not user: return user_not_found()
+    
+    # Prevent deletion of admin users (even by other admins)
+    if user.role == 'admin':
+        return jsonify({'success': False, 'error': 'Cannot delete admin users'}), 403
 
     # Soft delete - set status to 'deleted'
     user.status = 'deleted'

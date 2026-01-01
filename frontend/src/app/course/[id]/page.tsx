@@ -71,15 +71,16 @@ export default function CourseDetail() {
 
       const userStr = localStorage.getItem('user');
       if (!userStr) {
-        setEnrollmentMessage('Please log in to enroll in this course');
+        // Redirect to home page where login modal can be triggered
+        router.push('/?showLogin=true');
         return;
       }
 
       const user = JSON.parse(userStr);
       
-      // Check if user can enroll (instructors cannot)
-      if (!canEnroll()) {
-        setEnrollmentMessage('Instructors cannot enroll in courses. Only students and admins can enroll.');
+      // Check if user is instructor (instructors cannot enroll)
+      if (user.role === 'instructor') {
+        setEnrollmentMessage('Instructors cannot enroll in courses. Only students can enroll.');
         return;
       }
 
@@ -221,7 +222,7 @@ export default function CourseDetail() {
                     Continue Learning
                   </button>
                 </Link>
-              ) : canEnroll() ? (
+              ) : (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
@@ -229,10 +230,6 @@ export default function CourseDetail() {
                 >
                   {enrolling ? 'Enrolling...' : 'Enroll Now'}
                 </button>
-              ) : (
-                <div className="w-full bg-gray-100 border-2 border-gray-300 text-gray-600 py-3 rounded-lg font-bold text-center">
-                  <p className="text-sm">Instructors cannot enroll in courses</p>
-                </div>
               )}
 
               <div className="space-y-2 text-sm text-gray-600 pt-4 border-t border-gray-200">

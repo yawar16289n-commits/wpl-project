@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/app/components/Header';
-import { dashboardApi, courseApi } from '@/lib/api';
+import { dashboardApi, adminApi } from '@/lib/api';
 
 interface CourseData {
   id: number;
@@ -55,7 +56,18 @@ interface DashboardData {
     drafts?: number;
     total_students?: number;
     total_reviews?: number;
+    total_lecturers?: number;
+    total_enrollments?: number;
   };
+}
+
+interface UserData {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
 }
 
 // Helper function to validate and sanitize image URLs
@@ -77,6 +89,7 @@ const getValidImageUrl = (url: string | null | undefined): string => {
 };
 
 export default function Dashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('inprogress');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +100,13 @@ export default function Dashboard() {
   const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null);
   const [deletingCourse, setDeletingCourse] = useState(false);
+  
+  // Admin-specific states
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [userFilter, setUserFilter] = useState('active');
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -103,7 +123,9 @@ export default function Dashboard() {
         const userRole = user.role;
 
         let response;
-        if (userRole === 'instructor') {
+        if (userRole === 'admin') {
+          response = await adminApi.getDashboardStats();
+        } else if (userRole === 'instructor') {
           response = await dashboardApi.getInstructorDashboard(userId);
         } else {
           response = await dashboardApi.getStudentDashboard(userId);
@@ -113,8 +135,16 @@ export default function Dashboard() {
           // Dashboard API returns data directly, not nested in 'dashboard'
           const data = response.data as any;
           
-          // Transform the student dashboard response
-          if (userRole !== 'instructor' && data.courses) {
+          // Transform the admin dashboard response
+          if (userRole === 'admin' && data.stats) {
+            const transformedData: DashboardData = {
+              user: user,
+              stats: data.stats
+            };
+            setDashboardData(transformedData);
+            // Fetch users for admin
+            fetchUsers();
+          } else if (userRole !== 'instructor' && userRole !== 'admin' && data.courses) {
             // Map API response to component format
             const mappedCourses = data.courses.map((item: any) => ({
               id: item.enrollment_id,
@@ -198,34 +228,51 @@ export default function Dashboard() {
     fetchDashboard();
   }, []);
 
+  // Admin: Fetch users
+  const fetchUsers = async () => {
+    if (!dashboardData) return;
+    try {
+      const usersRes = await adminApi.getAllUsers(userFilter, dashboardData.user.id);
+      if (usersRes.success && usersRes.data) {
+        setUsers((usersRes.data as { users: UserData[] }).users);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  // Admin: Watch user filter changes
+  useEffect(() => {
+    if (dashboardData?.user?.role === 'admin') {
+      fetchUsers();
+    }
+  }, [userFilter]);
+
+  // Admin: Delete user handler
+  const handleDeleteUser = async () => {
+    if (!selectedUser || !dashboardData) return;
+
+    setDeletingUser(true);
+    const response = await adminApi.deleteUser(selectedUser.id, dashboardData.user.id);
+
+    if (response.success) {
+      setShowDeleteUserModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } else {
+      alert(response.error || 'Failed to delete user');
+    }
+    setDeletingUser(false);
+  };
+
   const handleUnenrollClick = (enrollment: EnrollmentData) => {
     setSelectedEnrollment(enrollment);
     setShowUnenrollModal(true);
   };
 
   const handleContinueLearning = async (enrollment: EnrollmentData) => {
-    try {
-      const { progressApi } = await import('@/lib/api');
-      const response = await progressApi.getNextLecture(enrollment.id);
-      
-      if (response.success && response.data) {
-        const data = response.data as { next_lecture?: { lecture_id: number; course_id: number } };
-        if (data.next_lecture) {
-          // Navigate to the next incomplete lecture
-          window.location.href = `/learn/${data.next_lecture.course_id}?lecture=${data.next_lecture.lecture_id}`;
-        } else {
-          // Course completed, just go to course page
-          window.location.href = `/learn/${enrollment.course.id}`;
-        }
-      } else {
-        // Fallback to course page if API fails
-        window.location.href = `/learn/${enrollment.course.id}`;
-      }
-    } catch (err) {
-      console.error('Error fetching next lecture:', err);
-      // Fallback to course page
-      window.location.href = `/learn/${enrollment.course.id}`;
-    }
+    // Simply navigate to the course learning page
+    window.location.href = `/learn/${enrollment.course.id}`;
   };
 
   const handleUnenrollConfirm = async () => {
@@ -243,8 +290,32 @@ export default function Dashboard() {
           const user = JSON.parse(userStr);
           const refreshResponse = await dashboardApi.getStudentDashboard(user.id);
           if (refreshResponse.success && refreshResponse.data) {
-            const data = (refreshResponse.data as { dashboard: DashboardData }).dashboard;
-            setDashboardData(data);
+            const data = refreshResponse.data as any;
+            
+            // Map API response to component format (same as in useEffect)
+            const mappedCourses = data.courses.map((item: any) => ({
+              id: item.enrollment_id,
+              user_id: user.id,
+              course_id: item.course.id,
+              enrolled_at: item.enrolled_at,
+              progress: item.progress_percentage,
+              status: item.status,
+              course: item.course
+            }));
+            
+            const transformedData: DashboardData = {
+              user: user,
+              enrolled_courses: {
+                in_progress: mappedCourses.filter((c: any) => c.status === 'active'),
+                completed: mappedCourses.filter((c: any) => c.status === 'completed')
+              },
+              stats: {
+                total_enrolled: data.total || 0,
+                in_progress: mappedCourses.filter((c: any) => c.status === 'active').length,
+                completed: mappedCourses.filter((c: any) => c.status === 'completed').length
+              }
+            };
+            setDashboardData(transformedData);
           }
         }
         setShowUnenrollModal(false);
@@ -327,6 +398,7 @@ export default function Dashboard() {
   }
 
   const isInstructor = dashboardData.user.role === 'instructor';
+  const isAdmin = dashboardData.user.role === 'admin';
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -377,7 +449,7 @@ export default function Dashboard() {
               Welcome back, {dashboardData.user.name}!
             </h2>
             <p className="text-gray-600">
-              {isInstructor ? 'Manage your courses and students' : 'Continue your learning journey'}
+              {isAdmin ? 'Manage platform users and content' : isInstructor ? 'Manage your courses and students' : 'Continue your learning journey'}
             </p>
           </div>
           {isInstructor && (
@@ -389,7 +461,160 @@ export default function Dashboard() {
           )}
         </div>
 
-        =        {!isInstructor && (
+        {/* Admin Dashboard */}
+        {isAdmin && (
+          <>
+            {/* Admin Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Students</p>
+                    <p className="text-3xl font-bold text-gray-900">{dashboardData.stats.total_students || 0}</p>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Instructors</p>
+                    <p className="text-3xl font-bold text-gray-900">{dashboardData.stats.total_lecturers || 0}</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-lg">
+                    <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Courses</p>
+                    <p className="text-3xl font-bold text-gray-900">{dashboardData.stats.total_courses || 0}</p>
+                  </div>
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Enrollments</p>
+                    <p className="text-3xl font-bold text-gray-900">{dashboardData.stats.total_enrollments || 0}</p>
+                  </div>
+                  <div className="bg-yellow-100 p-3 rounded-lg">
+                    <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Users Management */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-gray-900">User Management</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setUserFilter('active')}
+                      className={`px-4 py-2 rounded-md font-medium ${userFilter === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      onClick={() => setUserFilter('deleted')}
+                      className={`px-4 py-2 rounded-md font-medium ${userFilter === 'deleted' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      Deleted
+                    </button>
+                    <button
+                      onClick={() => setUserFilter('all')}
+                      className={`px-4 py-2 rounded-md font-medium ${userFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      All
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                            user.role === 'instructor' ? 'bg-purple-100 text-purple-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {user.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {user.role !== 'admin' && (
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowDeleteUserModal(true);
+                              }}
+                              className="text-red-600 hover:text-red-900 font-medium"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {users.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">No users found</div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {!isInstructor && !isAdmin && (
           <>
             <div className="flex gap-8 mb-8 border-b border-gray-200">
               <button
@@ -740,6 +965,37 @@ export default function Dashboard() {
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 disabled:opacity-50"
               >
                 {deletingCourse ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Modal (Admin) */}
+      {showDeleteUserModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Delete User</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>{selectedUser.name}</strong>? This action will set their status to deleted.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteUserModal(false);
+                  setSelectedUser(null);
+                }}
+                disabled={deletingUser}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deletingUser}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingUser ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

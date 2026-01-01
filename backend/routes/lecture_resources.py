@@ -7,40 +7,48 @@ lecture_resources_bp = Blueprint('lecture_resources', __name__, url_prefix='/lec
 # Create Lecture Resource (POST)
 @lecture_resources_bp.route('/', methods=['POST'])
 def create_lecture_resource():
-    data = request.get_json()
-    
-    if not data or 'lecture_id' not in data or 'resource_type' not in data or 'title' not in data:
+    try:
+        data = request.get_json()
+        
+        if not data or 'lecture_id' not in data or 'resource_type' not in data or 'title' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'lecture_id, resource_type, and title are required'
+            }), 400
+        
+        # Check if lecture exists
+        lecture = CourseModule.query.get(data['lecture_id'])
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found'
+            }), 404
+        
+        new_resource = LectureResource(
+            lecture_id=data['lecture_id'],
+            resource_type=data['resource_type'],
+            title=data['title'],
+            url=data.get('url'),
+            content=data.get('content'),
+            duration=data.get('duration'),
+            order=data.get('order', 0)
+        )
+        
+        db.session.add(new_resource)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Lecture resource created successfully',
+            'resource': new_resource.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating lecture resource: {str(e)}")
         return jsonify({
             'success': False,
-            'error': 'lecture_id, resource_type, and title are required'
-        }), 400
-    
-    # Check if lecture exists
-    lecture = CourseModule.query.get(data['lecture_id'])
-    if not lecture:
-        return jsonify({
-            'success': False,
-            'error': 'Lecture not found'
-        }), 404
-    
-    new_resource = LectureResource(
-        lecture_id=data['lecture_id'],
-        resource_type=data['resource_type'],
-        title=data['title'],
-        url=data.get('url'),
-        content=data.get('content'),
-        duration=data.get('duration'),
-        order=data.get('order', 0)
-    )
-    
-    db.session.add(new_resource)
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Lecture resource created successfully',
-        'resource': new_resource.to_dict()
-    }), 201
+            'error': f'Failed to create resource: {str(e)}'
+        }), 500
 
 
 # Get All Lecture Resources (GET)

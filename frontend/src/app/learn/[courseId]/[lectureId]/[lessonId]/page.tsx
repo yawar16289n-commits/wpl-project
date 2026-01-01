@@ -75,9 +75,9 @@ export default function LessonPage() {
         }
     };
 
-    const handleMarkComplete = async () => {
+    const handleToggleCompletion = async () => {
         if (!user) {
-            setError('Please log in to mark lessons as complete');
+            setError('Please log in to update lesson status');
             return;
         }
 
@@ -87,50 +87,24 @@ export default function LessonPage() {
         }
 
         try {
-            // Use new progress API with enrollment_id and lecture_resource_id
-            const response = await progressApi.markLectureComplete(
+            const response = await progressApi.toggleLectureCompletion(
                 enrollment.id,
                 Number(lessonId)
             );
 
-            if (response.success) {
-                setIsCompleted(true);
-                setSuccessMessage('Lesson marked as complete! 🎉');
+            if (response.success && response.data) {
+                const data = response.data as any;
+                setIsCompleted(!isCompleted);
+                const message = data.progress?.completed 
+                    ? 'Lesson marked as complete! 🎉' 
+                    : 'Lesson marked as incomplete';
+                setSuccessMessage(message);
                 setTimeout(() => setSuccessMessage(''), 3000);
             } else {
-                setError(response.error || 'Failed to mark lesson as complete');
+                setError(response.error || 'Failed to update lesson status');
             }
         } catch (err) {
-            setError('An error occurred');
-        }
-    };
-
-    const handleMarkUncomplete = async () => {
-        if (!user) {
-            setError('Please log in');
-            return;
-        }
-
-        if (!enrollment) {
-            setError('Enrollment not found');
-            return;
-        }
-
-        try {
-            const response = await progressApi.markLectureUncomplete(
-                enrollment.id,
-                Number(lessonId)
-            );
-
-            if (response.success) {
-                setIsCompleted(false);
-                setSuccessMessage('Lesson marked as incomplete');
-                setTimeout(() => setSuccessMessage(''), 3000);
-            } else {
-                setError(response.error || 'Failed to mark lesson as incomplete');
-            }
-        } catch (err) {
-            setError('An error occurred');
+            console.error('Toggle completion error:', err);
         }
     };
 
@@ -216,21 +190,21 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Mark as Complete Button */}
+                {/* Toggle Completion Button */}
                 <div className="flex justify-end pt-6 border-t border-gray-100">
                     {isCompleted ? (
                         <button
-                            onClick={handleMarkUncomplete}
+                            onClick={handleToggleCompletion}
                             className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-lg transition-all shadow-sm bg-green-100 text-green-700 border border-green-200 hover:bg-gray-100 hover:text-gray-700"
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            Completed - Mark as Incomplete
+                            Completed
                         </button>
                     ) : (
                         <button
-                            onClick={handleMarkComplete}
+                            onClick={handleToggleCompletion}
                             className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-lg transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md"
                         >
                             Mark as Completed

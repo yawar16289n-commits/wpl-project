@@ -112,17 +112,22 @@ def get_enrollment(enrollment_id):
 # --- Delete / Unenroll ---
 @enrollments_bp.route('/<int:enrollment_id>', methods=['DELETE'])
 def unenroll_from_course(enrollment_id):
-    enrollment = Enrollment.query.get(enrollment_id)
-    if not enrollment:
-        return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
+    try:
+        enrollment = Enrollment.query.get(enrollment_id)
+        if not enrollment:
+            return jsonify({'success': False, 'error': 'Enrollment not found'}), 404
 
-    if enrollment.status in ['deleted', 'dropped']:
-        return jsonify({'success': False, 'error': 'Already unenrolled'}), 400
+        if enrollment.status in ['deleted', 'dropped']:
+            return jsonify({'success': False, 'error': 'Already unenrolled'}), 400
 
-    enrollment.status = 'deleted'
-    Progress.query.filter_by(enrollment_id=enrollment.id).update({'status': 'deleted'})
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Unenrolled successfully'}), 200
+        enrollment.status = 'deleted'
+        Progress.query.filter_by(enrollment_id=enrollment.id).update({'status': 'deleted'}, synchronize_session=False)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Unenrolled successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error unenrolling: {str(e)}")
+        return jsonify({'success': False, 'error': f'Failed to unenroll: {str(e)}'}), 500
 
 
 # --- Get User Enrollments ---

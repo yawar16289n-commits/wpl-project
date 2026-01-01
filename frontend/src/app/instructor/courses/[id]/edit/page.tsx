@@ -21,8 +21,6 @@ export default function EditCourse() {
     duration: '',
     image: '',
     language: 'English',
-    skills: '',
-    learning_outcomes: '',
   });
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -61,12 +59,6 @@ export default function EditCourse() {
           duration: course.duration || '',
           image: course.image || '',
           language: course.language || 'English',
-          skills: Array.isArray(course.skills) ? course.skills.join(', ') : '',
-          learning_outcomes: Array.isArray(course.learning_outcomes) 
-            ? course.learning_outcomes.join('\n') 
-            : Array.isArray(course.learningOutcomes)
-            ? course.learningOutcomes.join('\n')
-            : '',
         });
       }
       setLoading(false);
@@ -81,13 +73,7 @@ export default function EditCourse() {
     setError('');
     setMessage('');
 
-    const courseData = {
-      ...formData,
-      skills: formData.skills.split(',').map((s) => s.trim()).filter((s) => s),
-      learning_outcomes: formData.learning_outcomes.split('\n').filter((s) => s.trim()),
-    };
-
-    const response = await courseApi.updateCourse(Number(courseId), courseData);
+    const response = await courseApi.updateCourse(Number(courseId), formData);
 
     if (response.success) {
       setMessage('Course updated successfully!');
@@ -267,30 +253,6 @@ export default function EditCourse() {
               type="url"
               value={formData.image}
               onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Skills (comma-separated)
-            </label>
-            <input
-              type="text"
-              value={formData.skills}
-              onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Learning Outcomes (one per line)
-            </label>
-            <textarea
-              value={formData.learning_outcomes}
-              onChange={(e) => setFormData({ ...formData, learning_outcomes: e.target.value })}
-              rows={5}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
